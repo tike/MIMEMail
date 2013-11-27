@@ -24,8 +24,8 @@ import (
 
 //Mail represents a MIME email message and handles encoding.
 type Mail struct {
-	/* Address Lists for the Mailheader,
-	   Fields that are nil, will be ignored. */
+	// Address Lists for the Mailheader,
+	// Fields that are nil, will be ignored.
 	Sender     []*mail.Address
 	From       []*mail.Address
 	To         []*mail.Address
@@ -34,10 +34,10 @@ type Mail struct {
 	ReplyTo    []*mail.Address
 	FollowupTo []*mail.Address
 
-	//The subject Line
+	// The subject Line
 	Subject string
 
-	//Filenames of Attachments to send along
+	// Filenames of Attachments to send along
 	Attachments []string
 
 	boundary   []byte
@@ -48,10 +48,13 @@ type Mail struct {
 	out  *bytes.Buffer
 }
 
+// Returns a new mail object ready to use.
 func NewMail() *Mail {
 	return &Mail{out: bytes.NewBuffer(nil)}
 }
 
+// Returns just the mailaddresses of all the recipients, ready to be passed to
+// smtp.SendMail et al. for your convenience.
 func (m *Mail) Recipients() (to []string) {
 	to = make([]string, 0, 10)
 	for _, mail := range m.To {
@@ -66,26 +69,35 @@ func (m *Mail) Recipients() (to []string) {
 	return
 }
 
-func (m *Mail) SendMail(adr string, a smtp.Auth) (err error) {
+// Sends the mail via smtp.SendMail. The first entry of the FROM list is passed on
+// to smtp.SendMail and should match the one in auth.
+func (m *Mail) SendMail(adr string, auth smtp.Auth) (err error) {
 	var msg []byte
 	if msg, err = m.Bytes(); err != nil {
 		return
 	}
-	return smtp.SendMail(adr, a, m.From[0].Address, m.Recipients(), msg)
+	return smtp.SendMail(adr, auth, m.From[0].Address, m.Recipients(), msg)
 }
 
+// Formats the mail obj for using a HTML body and returns a buffer that you can
+// render your Template to. You must call either HTMLBody or PlainTextBody.
+// If you call both, only your last call will be respected.
 func (m *Mail) HTMLBody() io.Writer {
 	m.body = bytes.NewBuffer(nil)
 	m.bodyHeader = "Content-Type: text/html; charset=utf-8\r\n"
 	return m.body
 }
 
+// Formats the mail obj for using a plaintext body and returns a buffer that you
+// can render your Template to. You must call either HTMLBody or PlainTextBody.
+// If you call both, only your last call will be respected.
 func (m *Mail) PlainTextBody() io.Writer {
 	m.body = bytes.NewBuffer(nil)
 	m.bodyHeader = "Content-Type: text/plain; charset=utf-8\r\n"
 	return m.body
 }
 
+// Returns the fully formatted complete message as a slice of bytes.
 func (m *Mail) Bytes() (b []byte, err error) {
 	if _, err = m.writeParts(); err != nil {
 		return
@@ -94,6 +106,7 @@ func (m *Mail) Bytes() (b []byte, err error) {
 	return
 }
 
+// Writes the fully formatted complete message to the given writer.
 func (m *Mail) WriteTo(w io.Writer) (n int, err error) {
 	if n, err = m.writeParts(); err != nil {
 		return
