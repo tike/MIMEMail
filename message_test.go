@@ -9,8 +9,8 @@ import (
 
 func Message_Factory() *Mail {
 	m := NewMail()
-	m.From = []*mail.Address{TMX.Address}
-	m.Bcc = []*mail.Address{GMX.Address}
+	m.Recv["From"] = []mail.Address{TMX.Address}
+	m.Recv["Cc"] = []mail.Address{GMX.Address}
 	m.Subject = "Jo Doag!"
 	return m
 }
@@ -40,7 +40,7 @@ func Test_Message_Body(t *testing.T) {
 
 func Test_Message_Attach(t *testing.T) {
 	m := Message_Factory()
-	m.Attachments = []string{"C:/Users/tike/Pictures/ww.jpg", "C:/Users/tike/Pictures/pim.jpg"}
+	m.Attachments = []string{"short_attachment.txt", "short_attachment.txt"}
 	tmpl, err := template.ParseFiles("mailBody.html")
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,19 @@ func Test_Message_Attach(t *testing.T) {
 }
 
 func Test_SendMail(t *testing.T) {
-	if err = m.SendMail(ARCOR.HostAdr(), ARCOR.Auth()); err == nil {
+	m := Message_Factory()
+
+	tmpl, err := template.ParseFiles("mailBody.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tmpl.ExecuteTemplate(m.HTMLBody(), "body", nil); err != nil {
+		t.Fatal(err)
+	}
+
+	m.Attachments = []string{"short_attachment.txt", "short_attachment.txt"}
+	if err := m.SendMail(ARCOR.HostAdr(), ARCOR.Auth()); err != nil {
 		t.Fatal(err)
 	}
 }

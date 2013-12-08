@@ -26,18 +26,13 @@ import (
 type Mail struct {
 	// Address Lists for the Mailheader,
 	// Fields that are nil, will be ignored.
-	Sender     []*mail.Address
-	From       []*mail.Address
-	To         []*mail.Address
-	Cc         []*mail.Address
-	Bcc        []*mail.Address
-	ReplyTo    []*mail.Address
-	FollowupTo []*mail.Address
+	Recv map[string][]mail.Address
 
 	// The subject Line
 	Subject string
 
 	// Filenames of Attachments to send along
+	// ignored if nil (default).
 	Attachments []string
 
 	boundary   []byte
@@ -50,21 +45,52 @@ type Mail struct {
 
 // Returns a new mail object ready to use.
 func NewMail() *Mail {
-	return &Mail{out: bytes.NewBuffer(nil)}
+	return &Mail{
+		Recv: map[string][]mail.Address{
+			"Sender":     nil,
+			"From":       nil,
+			"To":         nil,
+			"Cc":         nil,
+			"Bcc":        nil,
+			"ReplyTo":    nil,
+			"FollowupTo": nil,
+		},
+		out:  bytes.NewBuffer(nil),
+		body: bytes.NewBuffer(nil),
+	}
+}
+
+// Adds a recipient to your mail Header. Field should be any of the header address-list fields, i.e.
+// "Sender", "From", "To", "Cc", "Bcc", "ReplyTo" or "FollowupTo", otherwise
+// adding will fail (return false). Name should be the Name to display and address the
+// email address.
+func (m *Mail) Add_Recipient(field, name, address string) bool {
+	return m.Add_Address(field, mail.Address{name, address})
+}
+
+// Adds a recipient to your mail Header. Field should be any of the header address-list fields, i.e.
+// "Sender", "From", "To", "Cc", "Bcc", "ReplyTo" or "FollowupTo", otherwise
+// adding will fail (return false).
+// see net/mail for details on the mail.Address struct.
+func (m *Mail) Add_Address(field string, address mail.Address) (added bool) {
+	_, validField := m.Recv[field]
+	if !validField {
+		return false
+	}
+	m.Recv[field] = append(m.Recv[field], address)
+	return true
 }
 
 // Returns just the mailaddresses of all the recipients, ready to be passed to
 // smtp.SendMail et al. for your convenience.
 func (m *Mail) Recipients() (to []string) {
 	to = make([]string, 0, 10)
-	for _, mail := range m.To {
-		to = append(to, mail.Address)
-	}
-	for _, mail := range m.Cc {
-		to = append(to, mail.Address)
-	}
-	for _, mail := range m.Bcc {
-		to = append(to, mail.Address)
+	for _, address_list := range m.Recv {
+		if address_list != nil {
+			for _, address := range address_list {
+				to = append(to, address.Address)
+			}
+		}
 	}
 	return
 }
@@ -76,14 +102,13 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) (err error) {
 	if msg, err = m.Bytes(); err != nil {
 		return
 	}
-	return smtp.SendMail(adr, auth, m.From[0].Address, m.Recipients(), msg)
+	return smtp.SendMail(adr, auth, m.Recv["From"][0].Address, m.Recipients(), msg)
 }
 
 // Formats the mail obj for using a HTML body and returns a buffer that you can
 // render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) HTMLBody() io.Writer {
-	m.body = bytes.NewBuffer(nil)
 	m.bodyHeader = "Content-Type: text/html; charset=utf-8\r\n"
 	return m.body
 }
@@ -92,12 +117,12 @@ func (m *Mail) HTMLBody() io.Writer {
 // can render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) PlainTextBody() io.Writer {
-	m.body = bytes.NewBuffer(nil)
 	m.bodyHeader = "Content-Type: text/plain; charset=utf-8\r\n"
 	return m.body
 }
 
 // Returns the fully formatted complete message as a slice of bytes.
+// Triggers formatting.
 func (m *Mail) Bytes() (b []byte, err error) {
 	if _, err = m.writeParts(); err != nil {
 		return
@@ -129,10 +154,10 @@ func (m *Mail) initializeMPHeader() (n int, err error) {
 	return
 }
 
-func (m *Mail) writeAdrList(header string, adrlist []*mail.Address) (n int, err error) {
+func (m *Mail) writeAdrList(header string, adrlist []mail.Address) (n int, err error) {
 	stringlist := make([]string, len(adrlist))
 	for i, adr := range adrlist {
-		stringlist[i] = fmt.Sprintf("%s", adr)
+		stringlist[i] = fmt.Sprintf("%s", &adr)
 	}
 	if n, err = fmt.Fprintf(m.out, "%s: %s\r\n", header, strings.Join(stringlist, ", ")); err != nil {
 		return
@@ -141,45 +166,11 @@ func (m *Mail) writeAdrList(header string, adrlist []*mail.Address) (n int, err 
 }
 
 func (m *Mail) writeHeader() (n int, err error) {
-	if m.Sender != nil {
-		if n, err = m.writeAdrList("Sender: %s\r\n", m.From); err != nil {
-			return
-		}
-	}
-
-	if m.From != nil {
-		if n, err = m.writeAdrList("From", m.From); err != nil {
-			return
-		}
-	}
-
-	if m.To != nil {
-		if n, err = m.writeAdrList("To", m.To); err != nil {
-			return
-		}
-	}
-
-	if m.Cc != nil {
-		if n, err = m.writeAdrList("Cc", m.Cc); err != nil {
-			return
-		}
-	}
-
-	if m.Bcc != nil {
-		if n, err = m.writeAdrList("Bcc", m.Bcc); err != nil {
-			return
-		}
-	}
-
-	if m.ReplyTo != nil {
-		if n, err = m.writeAdrList("Reply-To", m.ReplyTo); err != nil {
-			return
-		}
-	}
-
-	if m.FollowupTo != nil {
-		if n, err = m.writeAdrList("Mail-Followup-To", m.FollowupTo); err != nil {
-			return
+	for Field, address_list := range m.Recv {
+		if address_list != nil {
+			if n, err = m.writeAdrList(Field, address_list); err != nil {
+				return
+			}
 		}
 	}
 
