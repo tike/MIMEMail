@@ -56,6 +56,7 @@ func Test_Message_Attach(t *testing.T) {
 
 func Test_SendMail(t *testing.T) {
 	m := Message_Factory()
+	m.Add_Person("From", "你好 Motörhead", "你好 Motörhead@foobar.blup")
 
 	tmpl, err := template.ParseFiles("mailBody.html")
 	if err != nil {

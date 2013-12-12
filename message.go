@@ -65,7 +65,7 @@ func NewMail() *Mail {
 // "Sender", "From", "To", "Cc", "Bcc", "ReplyTo" or "FollowupTo", otherwise
 // adding will fail (return false). Name should be the Name to display and address the
 // email address.
-func (m *Mail) Add_Recipient(field, name, address string) bool {
+func (m *Mail) Add_Person(field, name, address string) bool {
 	return m.Add_Address(field, mail.Address{name, address})
 }
 
@@ -110,8 +110,8 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) (err error) {
 // render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) HTMLBody() io.Writer {
-	if m.Body == nil {
-		m.Body = bytes.NewBuffer(nil)
+	if m.body == nil {
+		m.body = bytes.NewBuffer(nil)
 	}
 	m.bodyHeader = "Content-Type: text/html; charset=utf-8\r\n"
 	return m.body
@@ -121,8 +121,8 @@ func (m *Mail) HTMLBody() io.Writer {
 // can render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) PlainTextBody() io.Writer {
-	if m.Body == nil {
-		m.Body = bytes.NewBuffer(nil)
+	if m.body == nil {
+		m.body = bytes.NewBuffer(nil)
 	}
 	m.bodyHeader = "Content-Type: text/plain; charset=utf-8\r\n"
 	return m.body
