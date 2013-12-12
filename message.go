@@ -85,9 +85,9 @@ func (m *Mail) Add_Address(field string, address mail.Address) (added bool) {
 // smtp.SendMail et al. for your convenience.
 func (m *Mail) Recipients() (to []string) {
 	to = make([]string, 0, 10)
-	for _, address_list := range m.Recv {
-		if address_list != nil {
-			for _, address := range address_list {
+	for _, field := range []string{"To", "Cc", "Bcc"} {
+		if m.Recv[field] != nil {
+			for _, address := range m.Recv[field] {
 				to = append(to, address.Address)
 			}
 		}
