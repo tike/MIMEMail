@@ -11,7 +11,7 @@ func Message_Factory() *Mail {
 	m := NewMail()
 	m.Recv["From"] = []mail.Address{TMX.Address}
 	m.Recv["Cc"] = []mail.Address{GMX.Address}
-	m.Subject = "Jo Doag!"
+	m.Subject = "你好 Motörhead"
 	return m
 }
 

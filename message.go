@@ -26,6 +26,7 @@ import (
 type Mail struct {
 	// Address Lists for the Mailheader,
 	// Fields that are nil, will be ignored.
+	// Use the Add_Recipient or Add_Address for convienice.
 	Recv map[string][]mail.Address
 
 	// The subject Line
@@ -55,8 +56,8 @@ func NewMail() *Mail {
 			"ReplyTo":    nil,
 			"FollowupTo": nil,
 		},
-		out:  bytes.NewBuffer(nil),
 		body: bytes.NewBuffer(nil),
+		out:  bytes.NewBuffer(nil),
 	}
 }
 
@@ -109,6 +110,9 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) (err error) {
 // render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) HTMLBody() io.Writer {
+	if m.Body == nil {
+		m.Body = bytes.NewBuffer(nil)
+	}
 	m.bodyHeader = "Content-Type: text/html; charset=utf-8\r\n"
 	return m.body
 }
@@ -117,6 +121,9 @@ func (m *Mail) HTMLBody() io.Writer {
 // can render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) PlainTextBody() io.Writer {
+	if m.Body == nil {
+		m.Body = bytes.NewBuffer(nil)
+	}
 	m.bodyHeader = "Content-Type: text/plain; charset=utf-8\r\n"
 	return m.body
 }
@@ -132,6 +139,7 @@ func (m *Mail) Bytes() (b []byte, err error) {
 }
 
 // Writes the fully formatted complete message to the given writer.
+// Triggers formatting.
 func (m *Mail) WriteTo(w io.Writer) (n int, err error) {
 	if n, err = m.writeParts(); err != nil {
 		return
