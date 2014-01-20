@@ -1,7 +1,7 @@
 //MIMEMail provides convenient formatting (and sending) of MIME formatted emails.
 //
-//Simply instanciate the Mail struct, add Recipients (To, Cc, Bcc). Set Reply-To
-//etc, set the Subject, add Attachments (by filename), get a Writer for the body
+//Simply create a new Mail struct wit NewMail(), add Recipients (To, Cc, Bcc, etc). Set
+//the Subject, add Attachments (by filename), get a Writer for the body
 //by calling HTMLBody() or PlainTextBody() and render your template into it.
 //Finally call Bytes() to obtain the formatted email or WriteTo() to directly
 //write it to a Writer or send it directly (via smtp.SendMail) through the
@@ -22,12 +22,13 @@ import (
 	"strings"
 )
 
-//Mail represents a MIME email message and handles encoding.
+// Mail represents a MIME email message and handles encoding,
+// MIME headers and so on.
 type Mail struct {
 	// Address Lists for the Mailheader,
 	// Fields that are nil, will be ignored.
-	// Use the Add_Recipient or Add_Address for convienice.
-	Recv map[string][]mail.Address
+	// Use the Add_Recipient or AddAddress for convienice.
+	Addr map[string][]mail.Address
 
 	// The subject Line
 	Subject string
@@ -47,7 +48,7 @@ type Mail struct {
 // Returns a new mail object ready to use.
 func NewMail() *Mail {
 	return &Mail{
-		Recv: map[string][]mail.Address{
+		Addr: map[string][]mail.Address{
 			"Sender":     nil,
 			"From":       nil,
 			"To":         nil,
@@ -63,22 +64,21 @@ func NewMail() *Mail {
 
 // Adds a recipient to your mail Header. Field should be any of the header address-list fields, i.e.
 // "Sender", "From", "To", "Cc", "Bcc", "ReplyTo" or "FollowupTo", otherwise
-// adding will fail (return false). Name should be the Name to display and address the
-// email address.
-func (m *Mail) Add_Person(field, name, address string) bool {
-	return m.Add_Address(field, mail.Address{name, address})
+// adding will fail (return false). Name should be the Name to display and address the email address.
+func (m *Mail) AddPerson(field, name, address string) bool {
+	return m.AddAddress(field, mail.Address{name, address})
 }
 
 // Adds a recipient to your mail Header. Field should be any of the header address-list fields, i.e.
 // "Sender", "From", "To", "Cc", "Bcc", "ReplyTo" or "FollowupTo", otherwise
 // adding will fail (return false).
 // see net/mail for details on the mail.Address struct.
-func (m *Mail) Add_Address(field string, address mail.Address) (added bool) {
-	_, validField := m.Recv[field]
+func (m *Mail) AddAddress(field string, address mail.Address) (added bool) {
+	_, validField := m.Addr[field]
 	if !validField {
 		return false
 	}
-	m.Recv[field] = append(m.Recv[field], address)
+	m.Addr[field] = append(m.Addr[field], address)
 	return true
 }
 
@@ -87,8 +87,8 @@ func (m *Mail) Add_Address(field string, address mail.Address) (added bool) {
 func (m *Mail) Recipients() (to []string) {
 	to = make([]string, 0, 10)
 	for _, field := range []string{"To", "Cc", "Bcc"} {
-		if m.Recv[field] != nil {
-			for _, address := range m.Recv[field] {
+		if m.Addr[field] != nil {
+			for _, address := range m.Addr[field] {
 				to = append(to, address.Address)
 			}
 		}
@@ -103,7 +103,7 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) (err error) {
 	if msg, err = m.Bytes(); err != nil {
 		return
 	}
-	return smtp.SendMail(adr, auth, m.Recv["From"][0].Address, m.Recipients(), msg)
+	return smtp.SendMail(adr, auth, m.Addr["From"][0].Address, m.Recipients(), msg)
 }
 
 // Formats the mail obj for using a HTML body and returns a buffer that you can
@@ -174,7 +174,7 @@ func (m *Mail) writeAdrList(header string, adrlist []mail.Address) (n int, err e
 }
 
 func (m *Mail) writeHeader() (n int, err error) {
-	for Field, address_list := range m.Recv {
+	for Field, address_list := range m.Addr {
 		if address_list != nil {
 			if n, err = m.writeAdrList(Field, address_list); err != nil {
 				return
