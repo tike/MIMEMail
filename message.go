@@ -1,6 +1,6 @@
 //MIMEMail provides convenient formatting (and sending) of MIME formatted emails.
 //
-//Simply create a new Mail struct wit NewMail(), add Recipients (To, Cc, Bcc, etc). Set
+//Simply create a new Mail struct with NewMail(), add Recipients (To, Cc, Bcc, etc). Set
 //the Subject, add Attachments (by filename), get a Writer for the body
 //by calling HTMLBody() or PlainTextBody() and render your template into it.
 //Finally call Bytes() to obtain the formatted email or WriteTo() to directly
@@ -96,14 +96,26 @@ func (m *Mail) Recipients() (to []string) {
 	return
 }
 
-// Sends the mail via smtp.SendMail. The first entry of the FROM list is passed on
-// to smtp.SendMail and should match the one in auth.
+// Sends the mail via smtp.SendMail. If you have the Sender field set, it's first
+// entry is used and should match the Address in auth, these values then passed on to
+// smtp.SendMail, returning any errors it throws, else the first From entry
+// is used (with the same restriction). If both are nil, a NoSender error is returned.
 func (m *Mail) SendMail(adr string, auth smtp.Auth) (err error) {
 	var msg []byte
 	if msg, err = m.Bytes(); err != nil {
 		return
 	}
-	return smtp.SendMail(adr, auth, m.Addr["From"][0].Address, m.Recipients(), msg)
+
+	if m.Addr["Sender"] != nil {
+		return smtp.SendMail(adr, auth, m.Addr["Sender"][0].Address, m.Recipients(), msg)
+	}
+
+	if m.Addr["From"] != nil {
+		return smtp.SendMail(adr, auth, m.Addr["From"][0].Address, m.Recipients(), msg)
+	}
+
+	var e NoSender
+	return e
 }
 
 // Formats the mail obj for using a HTML body and returns a buffer that you can
