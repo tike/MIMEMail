@@ -7,23 +7,33 @@ import (
 )
 
 func Example() {
+	// create the Mail
 	m := NewMail()
 
-	m.AddPerson("From", "你好 ma", "foobar@example.com")
+	// add Mail addresses to Address fields.
+	m.AddPerson("From", "foobar", "foobar@example.com")
 
-	as := mail.Address{"Äjna Süße", "blabla@example.com"}
+	// you also can add mail.Address structs
+	as := mail.Address{"baz", "baz@example.com"}
 	m.AddAddress("To", as)
 
-	m.Subject = "你好 Änja"
+	// set the subject
+	m.Subject = "你好 ma"
 
 	tmpl, err := template.ParseFiles("mailBody.html")
 	if err != nil {
 		return
 	}
 
+	// render your template into the mail body
 	if err = tmpl.ExecuteTemplate(m.HTMLBody(), "body", nil); err != nil {
 		return
 	}
-	a := smtp.PlainAuth("", "Username", "Password", "mail.example.com")
-	m.SendMail("mail.example.com:25", a)
+
+	a := smtp.PlainAuth("", "foobar", "foobars password", "foobar.example.com")
+
+	// directly send the mail.
+	if err := m.SendMail("mail.example.com:25", a); err != nil {
+		return
+	}
 }
