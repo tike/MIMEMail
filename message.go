@@ -10,17 +10,27 @@ package MIMEMail
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/base64"
-	"encoding/hex"
-	"fmt"
 	"io"
-	"net/mail"
+	"mime/multipart"
 	"net/smtp"
+	"net/textproto"
 	"os"
-	"path/filepath"
-	"strings"
 )
+
+const content_type = "Content-Type"
+const charset = "charset"
+const mime_html = "text/html"
+const mime_text = "text/plain"
+const mime_utf8 = "utf-8"
+
+const MULTI = "Content-Type: multipart/mixed; boundary="
+
+const HTML = "Content-Type: text/html; charset=utf-8"
+const TEXT = "Content-Type: text/plain; charset=utf-8"
+
+const FILE = "Content-Type: application/octet-stream"
+const FILE_TFE = "Content-Transfer-Encoding: base64"
+const FILE_DISP = "Content-Disposition: attachment; filename="
 
 // Mail represents a MIME email message and handles encoding,
 // MIME headers and so on.
@@ -28,303 +38,129 @@ type Mail struct {
 	// Address Lists for the Mailheader,
 	// Fields that are nil, will be ignored.
 	// Use the Add_Recipient or AddAddress for convienice.
-	Addr map[string][]mail.Address
+	Addresses
 
 	// The subject Line
 	Subject string
 
-	// Filenames of Attachments to send along
-	// ignored if nil (default).
-	Attachments []string
+	parts       []*MIMEPart
+	attachments []io.Reader
 
-	boundary   []byte
-	mimeHeader string
-	bodyHeader string
-
-	body *bytes.Buffer
-	out  *bytes.Buffer
+	msg *bytes.Buffer
 }
 
 // Returns a new mail object ready to use.
 func NewMail() *Mail {
 	return &Mail{
-		Addr: map[string][]mail.Address{
-			"Sender":     nil,
-			"From":       nil,
-			"To":         nil,
-			"Cc":         nil,
-			"Bcc":        nil,
-			"ReplyTo":    nil,
-			"FollowupTo": nil,
-		},
-		body: bytes.NewBuffer(nil),
-		out:  bytes.NewBuffer(nil),
+		Addresses:   NewAddresses(),
+		parts:       make([]*MIMEPart, 0, 1),
+		attachments: make([]io.Reader, 0, 1),
+		msg:         bytes.NewBuffer(nil),
 	}
-}
-
-// Adds a recipient to your mail Header. Field should be any of the header address-list fields, i.e.
-// "Sender", "From", "To", "Cc", "Bcc", "ReplyTo" or "FollowupTo", otherwise
-// adding will fail (return false). Name should be the Name to display and address the email address.
-func (m *Mail) AddPerson(field, name, address string) bool {
-	return m.AddAddress(field, mail.Address{name, address})
-}
-
-// Adds a recipient to your mail Header. Field should be any of the header address-list fields, i.e.
-// "Sender", "From", "To", "Cc", "Bcc", "ReplyTo" or "FollowupTo", otherwise
-// adding will fail (return false).
-// see net/mail for details on the mail.Address struct.
-func (m *Mail) AddAddress(field string, address mail.Address) (added bool) {
-	_, validField := m.Addr[field]
-	if !validField {
-		return false
-	}
-	m.Addr[field] = append(m.Addr[field], address)
-	return true
-}
-
-// Returns just the mailaddresses of all the recipients, ready to be passed to
-// smtp.SendMail et al. for your convenience.
-func (m *Mail) Recipients() (to []string) {
-	to = make([]string, 0, 10)
-	for _, field := range []string{"To", "Cc", "Bcc"} {
-		if m.Addr[field] != nil {
-			for _, address := range m.Addr[field] {
-				to = append(to, address.Address)
-			}
-		}
-	}
-	return
 }
 
 // Sends the mail via smtp.SendMail. If you have the Sender field set, it's first
-// entry is used and should match the Address in auth, these values then passed on to
+// entry is used and should match the Address in auth, these values are then passed on to
 // smtp.SendMail, returning any errors it throws, else the first From entry
-// is used (with the same restriction). If both are nil, a NoSender error is returned.
-func (m *Mail) SendMail(adr string, auth smtp.Auth) (err error) {
-	var msg []byte
-	if msg, err = m.Bytes(); err != nil {
-		return
+// is used (with the same restrictions). If both are nil, a NoSender error is returned.
+func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
+
+	if m.Addresses["Sender"] != nil {
+		return smtp.SendMail(adr, auth, m.Addresses["Sender"][0].Address, m.Recipients(), m.msg.Bytes())
 	}
 
-	if m.Addr["Sender"] != nil {
-		return smtp.SendMail(adr, auth, m.Addr["Sender"][0].Address, m.Recipients(), msg)
+	if m.Addresses["From"] != nil {
+		return smtp.SendMail(adr, auth, m.Addresses["From"][0].Address, m.Recipients(), m.msg.Bytes())
 	}
 
-	if m.Addr["From"] != nil {
-		return smtp.SendMail(adr, auth, m.Addr["From"][0].Address, m.Recipients(), msg)
-	}
+	return new(NoSender)
+}
 
-	var e NoSender
-	return e
+func (m *Mail) AddFile(filename string) error {
+	r, err := os.Open(filename)
+	if err != nil {
+		return err
+	}
+	m.attachments = append(m.attachments, r)
+	return nil
+}
+
+func (m *Mail) AddReader(r io.Reader) {
+	m.attachments = append(m.attachments, r)
+}
+
+func (m *Mail) getHeader() textproto.MIMEHeader {
+	part := make(textproto.MIMEHeader)
+	part.Set("MIME-Version", "MIME 1.0")
+	part.Set("Subject", m.Subject)
+	part = m.ToMimeHeader(part)
+	return part
+}
+
+func (m *Mail) addPart(ct, enc string) *MIMEPart {
+	n := NewMIMEPart()
+	n.Set(content_type, ct)
+	n.Set(charset, enc)
+
+	m.parts = append(m.parts, n)
+	return n
 }
 
 // Formats the mail obj for using a HTML body and returns a buffer that you can
 // render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) HTMLBody() io.Writer {
-	if m.body == nil {
-		m.body = bytes.NewBuffer(nil)
-	}
-	m.bodyHeader = "Content-Type: text/html; charset=utf-8\r\n"
-	return m.body
+	return m.addPart(mime_html, mime_utf8)
 }
 
 // Formats the mail obj for using a plaintext body and returns a buffer that you
 // can render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) PlainTextBody() io.Writer {
-	if m.body == nil {
-		m.body = bytes.NewBuffer(nil)
-	}
-	m.bodyHeader = "Content-Type: text/plain; charset=utf-8\r\n"
-	return m.body
+	return m.addPart(mime_text, mime_utf8)
 }
 
 // Returns the fully formatted complete message as a slice of bytes.
 // Triggers formatting.
-func (m *Mail) Bytes() (b []byte, err error) {
-	if _, err = m.writeParts(); err != nil {
-		return
+func (m *Mail) Bytes() ([]byte, error) {
+	if err := m.write(m.msg); err != nil {
+		return nil, err
 	}
-	b = m.out.Bytes()
-	return
+	return m.msg.Bytes(), nil
+}
+
+func (m *Mail) write(w io.Writer) error {
+	mpw := multipart.NewWriter(w)
+	if _, err := mpw.CreatePart(m.getHeader()); err != nil {
+		return err
+	}
+
+	for _, part := range m.parts {
+		pw, err := mpw.CreatePart(part.MIMEHeader)
+		if err != nil {
+			return err
+		}
+
+		if _, err := pw.Write(part.Bytes()); err != nil {
+			return err
+		}
+	}
+
+	for _, att := range m.attachments {
+		pw, err := mpw.CreateFormFile("foo", "bar")
+		if err != nil {
+			return err
+		}
+		if _, err = io.Copy(pw, att); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Writes the fully formatted complete message to the given writer.
 // Triggers formatting.
-func (m *Mail) WriteTo(w io.Writer) (n int, err error) {
-	if n, err = m.writeParts(); err != nil {
-		return
-	}
-	return w.Write(m.out.Bytes())
-}
-
-func (m *Mail) initializeMPHeader() (n int, err error) {
-	tmp := make([]byte, 30)
-	m.boundary = make([]byte, 64)
-	if n, err = io.ReadFull(rand.Reader, tmp); err != nil {
-		return
-	}
-	n = hex.Encode(m.boundary[2:62], tmp)
-	m.boundary[0] = 45
-	m.boundary[1] = 45
-	m.boundary[62] = 13
-	m.boundary[63] = 10
-	m.mimeHeader = fmt.Sprintf("Content-Type: multipart/mixed; boundary=%s\r\n", m.boundary[2:62])
-	return
-}
-
-func (m *Mail) writeAdrList(header string, adrlist []mail.Address) (n int, err error) {
-	stringlist := make([]string, len(adrlist))
-	for i, adr := range adrlist {
-		stringlist[i] = fmt.Sprintf("%s", &adr)
-	}
-	if n, err = fmt.Fprintf(m.out, "%s: %s\r\n", header, strings.Join(stringlist, ", ")); err != nil {
-		return
-	}
-	return
-}
-
-func (m *Mail) writeHeader() (n int, err error) {
-	for Field, address_list := range m.Addr {
-		if address_list != nil {
-			if n, err = m.writeAdrList(Field, address_list); err != nil {
-				return
-			}
-		}
-	}
-
-	if n, err = fmt.Fprintf(m.out, "Subject: %s\r\n", m.Subject); err != nil {
-		return
-	}
-
-	if n, err = fmt.Fprint(m.out, "MIME-Version: 1.0\r\n"); err != nil {
-		return
-	}
-
-	if m.Attachments == nil {
-		if n, err = fmt.Fprint(m.out, m.bodyHeader, "\r\n"); err != nil {
-			return
-		}
-	} else {
-		if n, err = fmt.Fprint(m.out, m.mimeHeader, "\r\n"); err != nil {
-			return
-		}
-	}
-
-	return
-}
-
-func (m *Mail) writeBody() (n int, err error) {
-	if m.Attachments != nil {
-		if n, err = m.out.Write(m.boundary); err != nil {
-			return
-		}
-		if n, err = m.out.WriteString(m.bodyHeader + "\r\n"); err != nil {
-			return
-		}
-	}
-	if n, err = m.out.Write(m.body.Bytes()); err != nil {
-		return
-	}
-	if m.Attachments != nil {
-		if n, err = m.out.Write(m.boundary[:62]); err != nil {
-			return
-		}
-	}
-	return
-}
-
-func (m *Mail) writeMIMEFileHeader(buf *bytes.Buffer, filename string) (err error) {
-	if _, err = buf.WriteString("Content-Type: application/octet-stream\r\n"); err != nil {
-		return
-	}
-	if _, err = buf.WriteString("Content-Transfer-Encoding: base64\r\n"); err != nil {
-		return
-	}
-	if _, err = buf.WriteString("Content-Disposition: attachment; filename=\"" + filepath.Base(filename) + "\"\r\n\r\n"); err != nil {
-		return
-	}
-	return
-
-}
-
-func (m *Mail) writeAttachment(buf *bytes.Buffer, filename string) (n int, err error) {
-	if err = m.writeMIMEFileHeader(buf, filename); err != nil {
-		return
-	}
-
-	var fObj *os.File
-	if fObj, err = os.Open(filename); err != nil {
-		return
-	}
-	enc := base64.NewEncoder(base64.StdEncoding, buf)
-
-	if _, err = io.Copy(enc, fObj); err != nil {
-		return
-	}
-	enc.Close()
-	if n, err = buf.Write([]byte{13, 10}); err != nil {
-		return
-	}
-	return
-}
-
-func (m *Mail) writeAttachments() (n int, err error) {
-	if n, err = m.out.WriteString("\r\n"); err != nil {
-		return
-	}
-
-	for i, filename := range m.Attachments {
-		buffer := bytes.NewBuffer(nil)
-
-		if n, err = m.writeAttachment(buffer, filename); err != nil {
-			return
-		}
-
-		if i != len(m.Attachments)-1 {
-			if n, err = buffer.Write(m.boundary); err != nil {
-				return
-			}
-		} else {
-			if n, err = buffer.Write(m.boundary[:62]); err != nil {
-				return
-			}
-		}
-
-		if _, err = io.Copy(m.out, buffer); err != nil {
-			return
-		}
-	}
-
-	if n, err = m.out.Write([]byte{45, 45}); err != nil {
-		return
-	}
-	return
-}
-
-func (m *Mail) writeParts() (n int, err error) {
-	if m.out == nil {
-		m.out = bytes.NewBuffer(nil)
-	}
-	if n, err = m.initializeMPHeader(); err != nil {
-		return
-	}
-
-	if n, err = m.writeHeader(); err != nil {
-		return
-	}
-
-	if m.body != nil {
-		if n, err = m.writeBody(); err != nil {
-			return
-		}
-	}
-
-	if m.Attachments != nil {
-		if n, err = m.writeAttachments(); err != nil {
-			return
-		}
-	}
-	return
+func (m *Mail) WriteTo(w io.Writer) error {
+	return m.write(w)
 }

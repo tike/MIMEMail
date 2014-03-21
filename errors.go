@@ -1,9 +1,13 @@
 package MIMEMail
 
-import "fmt"
-
 type NoSender int
 
 func (e NoSender) Error() string {
-	return fmt.Sprintf("You have neither From nor Sender set on your Mail!")
+	return "You have neither From nor Sender set on your Mail!"
+}
+
+type InvalidField string
+
+func (e InvalidField) Error() string {
+	return string(e) + " is not a valid field (use: From, Sender, To, Cc, Bcc, ReplyTo or FollowupTo)"
 }

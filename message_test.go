@@ -47,7 +47,13 @@ func Test_Message_Body(t *testing.T) {
 
 func Test_Message_Attach(t *testing.T) {
 	m := Message_Factory()
-	m.Attachments = []string{"short_attachment.txt", "short_attachment.txt"}
+
+	for _, name := range []string{"short_attachment.txt", "short_attachment.txt"} {
+		if err := m.AddFile(name); err != nil {
+			t.Fatalf("opening attachment: %s", err)
+		}
+	}
+
 	tmpl, err := template.ParseFiles("mailBody.html")
 	if err != nil {
 		t.Fatal(err)
