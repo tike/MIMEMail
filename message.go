@@ -15,10 +15,12 @@ import (
 	"net/smtp"
 	"net/textproto"
 	"os"
+	"strings"
 )
 
 const content_type = "Content-Type"
 const charset = "charset"
+const mime_multipart = "multipart/mixed"
 const mime_html = "text/html"
 const mime_text = "text/plain"
 const mime_utf8 = "utf-8"
@@ -89,11 +91,14 @@ func (m *Mail) AddReader(r io.Reader) {
 	m.attachments = append(m.attachments, r)
 }
 
-func (m *Mail) getHeader() textproto.MIMEHeader {
+func (m *Mail) getHeader(mpw *multipart.Writer) textproto.MIMEHeader {
 	part := make(textproto.MIMEHeader)
-	part.Set("MIME-Version", "MIME 1.0")
-	part.Set("Subject", m.Subject)
+
 	part = m.ToMimeHeader(part)
+	part.Set("Subject", m.Subject)
+	part.Set("MIME-Version", "MIME 1.0")
+	part.Set(content_type, mime_multipart+"; boundary="+mpw.Boundary())
+
 	return part
 }
 
@@ -129,9 +134,23 @@ func (m *Mail) Bytes() ([]byte, error) {
 	return m.msg.Bytes(), nil
 }
 
+func (m *Mail) writeHeader(w io.Writer, mpw *multipart.Writer) error {
+	header := m.getHeader(mpw)
+	for field, values := range header {
+		if _, err := w.Write([]byte(field + ": " + strings.Join(values, ",") + "\r\n")); err != nil {
+			return err
+		}
+	}
+	if _, err := w.Write([]byte{13, 10}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (m *Mail) write(w io.Writer) error {
 	mpw := multipart.NewWriter(w)
-	if _, err := mpw.CreatePart(m.getHeader()); err != nil {
+
+	if err := m.writeHeader(w, mpw); err != nil {
 		return err
 	}
 
@@ -154,6 +173,10 @@ func (m *Mail) write(w io.Writer) error {
 		if _, err = io.Copy(pw, att); err != nil {
 			return err
 		}
+	}
+
+	if err := mpw.Close(); err != nil {
+		return err
 	}
 
 	return nil
