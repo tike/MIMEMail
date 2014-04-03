@@ -10,6 +10,7 @@ package MIMEMail
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/smtp"
@@ -18,17 +19,14 @@ import (
 	"strings"
 )
 
-const content_type = "Content-Type"
-const charset = "charset"
-const mime_multipart = "multipart/mixed"
-const mime_html = "text/html"
-const mime_text = "text/plain"
-const mime_utf8 = "utf-8"
-
-const MULTI = "Content-Type: multipart/mixed; boundary="
-
-const HTML = "Content-Type: text/html; charset=utf-8"
-const TEXT = "Content-Type: text/plain; charset=utf-8"
+const (
+	content_type   = "Content-Type"
+	charset        = "charset"
+	mime_multipart = "multipart/mixed"
+	mime_html      = "text/html"
+	mime_text      = "text/plain"
+	mime_utf8      = "utf-8"
+)
 
 const FILE = "Content-Type: application/octet-stream"
 const FILE_TFE = "Content-Transfer-Encoding: base64"
@@ -91,21 +89,19 @@ func (m *Mail) AddReader(r io.Reader) {
 	m.attachments = append(m.attachments, r)
 }
 
-func (m *Mail) getHeader(mpw *multipart.Writer) textproto.MIMEHeader {
+func (m *Mail) getHeader() textproto.MIMEHeader {
 	part := make(textproto.MIMEHeader)
 
 	part = m.ToMimeHeader(part)
 	part.Set("Subject", m.Subject)
 	part.Set("MIME-Version", "MIME 1.0")
-	part.Set(content_type, mime_multipart+"; boundary="+mpw.Boundary())
-
 	return part
 }
 
 func (m *Mail) addPart(ct, enc string) *MIMEPart {
 	n := NewMIMEPart()
-	n.Set(content_type, ct)
-	n.Set(charset, enc)
+	n.Set(content_type, fmt.Sprintf("%s; %s=%s", ct, charset, enc))
+	//n.Set(charset, enc)
 
 	m.parts = append(m.parts, n)
 	return n
@@ -134,10 +130,10 @@ func (m *Mail) Bytes() ([]byte, error) {
 	return m.msg.Bytes(), nil
 }
 
-func (m *Mail) writeHeader(w io.Writer, mpw *multipart.Writer) error {
-	header := m.getHeader(mpw)
+func (m *Mail) writeHeader(w io.Writer) error {
+	header := m.getHeader()
 	for field, values := range header {
-		if _, err := w.Write([]byte(field + ": " + strings.Join(values, ",") + "\r\n")); err != nil {
+		if _, err := w.Write([]byte(fmt.Sprintf("%s: %s\r\n", field, strings.Join(values, ", ")))); err != nil {
 			return err
 		}
 	}
@@ -150,9 +146,11 @@ func (m *Mail) writeHeader(w io.Writer, mpw *multipart.Writer) error {
 func (m *Mail) write(w io.Writer) error {
 	mpw := multipart.NewWriter(w)
 
-	if err := m.writeHeader(w, mpw); err != nil {
+	if err := m.writeHeader(w); err != nil {
 		return err
 	}
+
+	w.Write([]byte(fmt.Sprintf("%s: %s; boundary=%s\r\n\r\n", content_type, mime_multipart, mpw.Boundary())))
 
 	for _, part := range m.parts {
 		pw, err := mpw.CreatePart(part.MIMEHeader)

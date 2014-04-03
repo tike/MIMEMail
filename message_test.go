@@ -12,6 +12,7 @@ func Message_Factory() *Mail {
 	m := NewMail()
 	m.AddPerson("From", "你好 ma", "foobar@example.com")
 	m.AddAddress("To", mail.Address{"Äjna Süße", "blabla@example.com"})
+	m.AddAddress("To", mail.Address{"xiao mao", "xiao_mao@example.com"})
 	m.Subject = "你好 Änja"
 	return m
 }
