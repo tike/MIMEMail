@@ -1,11 +1,11 @@
-//MIMEMail provides convenient formatting (and sending) of MIME formatted emails.
+// Package MIMEMail provides convenient formatting (and sending) of MIME formatted emails.
 //
-//Simply create a new Mail struct with NewMail(), add Recipients (To, Cc, Bcc, etc). Set
-//the Subject, add Attachments (by filename), get a Writer for the body
-//by calling HTMLBody() or PlainTextBody() and render your template into it.
-//Finally call Bytes() to obtain the formatted email or WriteTo() to directly
-//write it to a Writer or send it directly (via smtp.SendMail) through the
-//Mail.SendMail() method.
+// Simply create a new Mail struct with NewMail(), add Recipients (To, Cc, Bcc, etc). Set
+// the Subject, add Attachments (by filename), get a Writer for the body
+// by calling HTMLBody() or PlainTextBody() and render your template into it.
+// Finally call Bytes() to obtain the formatted email or WriteTo() to directly
+// write it to a Writer or send it directly (via smtp.SendMail) through the
+// Mail.SendMail() method.
 package MIMEMail
 
 import (
@@ -42,10 +42,12 @@ func NewMail() *Mail {
 	}
 }
 
-// SendMail sends the mail via smtp.SendMail. If you have the Sender field set, it's first
-// entry is used and should match the Address in auth, these values are then passed on to
-// smtp.SendMail, returning any errors it throws, else the first From entry
-// is used (with the same restrictions). If both are nil, a NoSender error is returned.
+// SendMail sends the mail via smtp.SendMail (which uses StartTLS if available).
+// If you have the Sender field set, it's first entry is used and
+// should match the Address in auth, else the first "From" entry
+// is used (with the same restrictions). If both are nil,
+// a NoSender error is returned.
+// These values are then passed on to smtp.SendMail, returning any errors it throws.
 func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
 	msg, err := m.Bytes()
 	if err != nil {
@@ -61,7 +63,7 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
 }
 
 // AddFile adds the file given by filename as an attachment to the mail.
-// If you provide at least one attachmentname argument, the file will be
+// If you provide the optional attachmentname argument, the file will be
 // attached with this name.
 func (m *Mail) AddFile(filename string, attachmentname ...string) error {
 	p, err := NewFile(filename, attachmentname...)
@@ -163,7 +165,7 @@ func (m *Mail) write(w io.Writer) error {
 	return nil
 }
 
-// Writes the fully formatted complete message to the given writer.
+// WriteTo writes the fully formatted complete message to the given writer.
 // Triggers formatting.
 func (m *Mail) WriteTo(w io.Writer) error {
 	return m.write(w)

@@ -26,11 +26,14 @@ const (
 	mime_attachment     = "attachment"
 )
 
+// MIMEPart wraps the MIMEPart functionality, in all likelyhood you'll never use
+// it directly.
 type MIMEPart struct {
 	textproto.MIMEHeader
 	*bytes.Buffer
 }
 
+// NewMIMEPart creates a new blank MIMEPart.
 func NewMIMEPart() *MIMEPart {
 	return &MIMEPart{
 		make(textproto.MIMEHeader),
@@ -38,20 +41,24 @@ func NewMIMEPart() *MIMEPart {
 	}
 }
 
+// NewPart creates a new MIMEPart with the given Content-Type and encoding.
 func NewPart(contenttype, encoding string) *MIMEPart {
 	p := NewMIMEPart()
 	p.Set(content_type, fmt.Sprintf("%s; charset=%s", contenttype, encoding))
 	return p
 }
 
+// NewHTML creates a new MIMEPart with "Content-Type: text/html; encoding: utf-8"
 func NewHTML() *MIMEPart {
 	return NewPart(mime_html, mime_utf8)
 }
 
+// NewPlainText creates a new MIMEPart with "Content-Type: text/plain; encoding: utf-8"
 func NewPlainText() *MIMEPart {
 	return NewPart(mime_text, mime_utf8)
 }
 
+// NewAttachment creates a new MIMEPart with all the necessary headers set.
 func NewAttachment(name string, r io.Reader) (*MIMEPart, error) {
 	// Content-Type: application/octet-stream
 	// Content-Transfer-Encoding: base64
@@ -67,6 +74,7 @@ func NewAttachment(name string, r io.Reader) (*MIMEPart, error) {
 	return p, nil
 }
 
+// NewFile creates a new Mail attackment MIMEPart with all the necessary headers set.
 func NewFile(file string, attachment ...string) (*MIMEPart, error) {
 	f, err := os.Open(file)
 	if err != nil {
