@@ -67,16 +67,17 @@ func NewAttachment(name string, r io.Reader) (*MIMEPart, error) {
 	return p, nil
 }
 
-func NewFile(file, attachment string) (*MIMEPart, error) {
+func NewFile(file string, attachment ...string) (*MIMEPart, error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	if attachment == "" {
-		attachment = filepath.Base(file)
+	var attachmentname string
+	if attachment == nil {
+		attachmentname = filepath.Base(file)
 	}
 
-	return NewAttachment(attachment, f)
+	return NewAttachment(attachmentname, f)
 }

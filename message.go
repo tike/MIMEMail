@@ -60,8 +60,11 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
 	return new(NoSender)
 }
 
-func (m *Mail) AddFile(filename, attachmentname string) error {
-	p, err := NewFile(filename, attachmentname)
+// AddFile adds the file given by filename as an attachment to the mail.
+// If you provide at least one attachmentname argument, the file will be
+// attached with this name.
+func (m *Mail) AddFile(filename string, attachmentname ...string) error {
+	p, err := NewFile(filename, attachmentname...)
 	if err != nil {
 		return err
 	}
