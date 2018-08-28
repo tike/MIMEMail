@@ -4,6 +4,7 @@ import (
 	//"bytes"
 	"html/template"
 	"net/mail"
+
 	//"os"
 	"testing"
 )
@@ -50,7 +51,7 @@ func Test_Message_Attach(t *testing.T) {
 	m := Message_Factory()
 
 	for _, name := range []string{"short_attachment.txt", "short_attachment.txt"} {
-		if err := m.AddFile(name); err != nil {
+		if err := m.AddFile(name, ""); err != nil {
 			t.Fatalf("opening attachment: %s", err)
 		}
 	}

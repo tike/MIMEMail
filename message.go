@@ -10,12 +10,14 @@ package MIMEMail
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/smtp"
 	"net/textproto"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -26,11 +28,14 @@ const (
 	mime_html      = "text/html"
 	mime_text      = "text/plain"
 	mime_utf8      = "utf-8"
-)
 
-const FILE = "Content-Type: application/octet-stream"
-const FILE_TFE = "Content-Transfer-Encoding: base64"
-const FILE_DISP = "Content-Disposition: attachment; filename="
+	mime_octetstream          = "application/octet-stream"
+	content_transfer_encoding = "Content-Transfer-Encoding"
+	mime_base64               = "base64"
+
+	content_disposition = "Content-Disposition"
+	mime_attachment     = "attachment"
+)
 
 // Mail represents a MIME email message and handles encoding,
 // MIME headers and so on.
@@ -43,8 +48,7 @@ type Mail struct {
 	// The subject Line
 	Subject string
 
-	parts       []*MIMEPart
-	attachments []io.Reader
+	parts []*MIMEPart
 
 	msg *bytes.Buffer
 }
@@ -52,10 +56,9 @@ type Mail struct {
 // Returns a new mail object ready to use.
 func NewMail() *Mail {
 	return &Mail{
-		Addresses:   NewAddresses(),
-		parts:       make([]*MIMEPart, 0, 1),
-		attachments: make([]io.Reader, 0, 1),
-		msg:         bytes.NewBuffer(nil),
+		Addresses: NewAddresses(),
+		parts:     make([]*MIMEPart, 0, 1),
+		msg:       bytes.NewBuffer(nil),
 	}
 }
 
@@ -76,17 +79,34 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
 	return new(NoSender)
 }
 
-func (m *Mail) AddFile(filename string) error {
-	r, err := os.Open(filename)
+func (m *Mail) AddFile(filename, attachmentname string) error {
+	f, err := os.Open(filename)
 	if err != nil {
 		return err
 	}
-	m.attachments = append(m.attachments, r)
-	return nil
+	defer f.Close()
+
+	if attachmentname == "" {
+		attachmentname = filepath.Base(filename)
+	}
+
+	return m.AddReader(attachmentname, f)
 }
 
-func (m *Mail) AddReader(r io.Reader) {
-	m.attachments = append(m.attachments, r)
+func (m *Mail) AddReader(name string, r io.Reader) error {
+	// Content-Type: application/octet-stream
+	// Content-Transfer-Encoding: base64
+	// Content-Disposition: attachment; filename="short_attachment.txt"
+	part := NewMIMEPart()
+	part.Set(content_type, mime_octetstream)
+	part.Set(content_transfer_encoding, mime_base64)
+	part.Set(content_disposition, fmt.Sprintf("%s; filename=%s", mime_attachment, name))
+
+	if _, err := io.Copy(base64.NewEncoder(base64.StdEncoding, part.Buffer), r); err != nil {
+		return err
+	}
+	m.parts = append(m.parts, part)
+	return nil
 }
 
 func (m *Mail) getHeader() textproto.MIMEHeader {
@@ -159,16 +179,6 @@ func (m *Mail) write(w io.Writer) error {
 		}
 
 		if _, err := pw.Write(part.Bytes()); err != nil {
-			return err
-		}
-	}
-
-	for _, att := range m.attachments {
-		pw, err := mpw.CreateFormFile("foo", "bar")
-		if err != nil {
-			return err
-		}
-		if _, err = io.Copy(pw, att); err != nil {
 			return err
 		}
 	}
