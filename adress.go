@@ -41,6 +41,22 @@ func (a Addresses) Recipients() []string {
 	return to
 }
 
+// EffectiveSender returns the first sender entry, if there is none it returns
+// the first from entry, if there is none it returns NoSender error
+func (a Addresses) EffectiveSender() (string, error) {
+	if sender, ok := a[AddrSender]; ok {
+		if len(sender) > 0 {
+			return sender[0].Address, nil
+		}
+	}
+	if from, ok := a[AddrFrom]; ok {
+		if len(from) > 0 {
+			return from[0].Address, nil
+		}
+	}
+	return "", new(NoSender)
+}
+
 // Sender adds the given name, address pair to Sender.
 func (a *Addresses) Sender(name, address string) error {
 	return a.AddPerson(AddrSender, name, address)

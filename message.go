@@ -50,15 +50,12 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
 		return err
 	}
 
-	if m.Addresses["Sender"] != nil {
-		return smtp.SendMail(adr, auth, m.Addresses["Sender"][0].Address, m.Recipients(), msg)
+	from, err := m.EffectiveSender()
+	if err != nil {
+		return err
 	}
 
-	if m.Addresses["From"] != nil {
-		return smtp.SendMail(adr, auth, m.Addresses["From"][0].Address, m.Recipients(), msg)
-	}
-
-	return new(NoSender)
+	return smtp.SendMail(adr, auth, from, m.Recipients(), msg)
 }
 
 // AddFile adds the file given by filename as an attachment to the mail.
