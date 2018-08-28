@@ -30,8 +30,6 @@ type Mail struct {
 	Subject string
 
 	parts []*MIMEPart
-
-	msg *bytes.Buffer
 }
 
 // NewMail returns a new mail object ready to use.
@@ -39,7 +37,6 @@ func NewMail() *Mail {
 	return &Mail{
 		Addresses: NewAddresses(),
 		parts:     make([]*MIMEPart, 0, 1),
-		msg:       bytes.NewBuffer(nil),
 	}
 }
 
@@ -48,13 +45,17 @@ func NewMail() *Mail {
 // smtp.SendMail, returning any errors it throws, else the first From entry
 // is used (with the same restrictions). If both are nil, a NoSender error is returned.
 func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
+	msg, err := m.Bytes()
+	if err != nil {
+		return err
+	}
 
 	if m.Addresses["Sender"] != nil {
-		return smtp.SendMail(adr, auth, m.Addresses["Sender"][0].Address, m.Recipients(), m.msg.Bytes())
+		return smtp.SendMail(adr, auth, m.Addresses["Sender"][0].Address, m.Recipients(), msg)
 	}
 
 	if m.Addresses["From"] != nil {
-		return smtp.SendMail(adr, auth, m.Addresses["From"][0].Address, m.Recipients(), m.msg.Bytes())
+		return smtp.SendMail(adr, auth, m.Addresses["From"][0].Address, m.Recipients(), msg)
 	}
 
 	return new(NoSender)
@@ -110,10 +111,11 @@ func (m *Mail) PlainTextBody() io.Writer {
 // Bytes returns the fully formatted complete message as a slice of bytes.
 // Triggers formatting.
 func (m *Mail) Bytes() ([]byte, error) {
-	if err := m.write(m.msg); err != nil {
+	msg := bytes.NewBuffer(nil)
+	if err := m.write(msg); err != nil {
 		return nil, err
 	}
-	return m.msg.Bytes(), nil
+	return msg.Bytes(), nil
 }
 
 func (m *Mail) writeHeader(w io.Writer) error {
