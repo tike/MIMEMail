@@ -89,7 +89,7 @@ func (m *Mail) getHeader() textproto.MIMEHeader {
 
 	part = m.ToMimeHeader(part)
 	part.Set("Subject", m.Subject)
-	part.Set("MIME-Version", "MIME 1.0")
+	part.Set("MIME-Version", "1.0")
 	return part
 }
 
@@ -131,9 +131,7 @@ func (m *Mail) writeHeader(w io.Writer) error {
 			return err
 		}
 	}
-	if _, err := w.Write([]byte{13, 10}); err != nil {
-		return err
-	}
+
 	return nil
 }
 
