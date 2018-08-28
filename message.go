@@ -34,7 +34,7 @@ type Mail struct {
 	msg *bytes.Buffer
 }
 
-// Returns a new mail object ready to use.
+// NewMail returns a new mail object ready to use.
 func NewMail() *Mail {
 	return &Mail{
 		Addresses: NewAddresses(),
@@ -43,7 +43,7 @@ func NewMail() *Mail {
 	}
 }
 
-// Sends the mail via smtp.SendMail. If you have the Sender field set, it's first
+// SendMail sends the mail via smtp.SendMail. If you have the Sender field set, it's first
 // entry is used and should match the Address in auth, these values are then passed on to
 // smtp.SendMail, returning any errors it throws, else the first From entry
 // is used (with the same restrictions). If both are nil, a NoSender error is returned.
@@ -73,6 +73,7 @@ func (m *Mail) AddFile(filename string, attachmentname ...string) error {
 	return nil
 }
 
+// AddReader adds the given reader as an attachment, using name as the filename.
 func (m *Mail) AddReader(name string, r io.Reader) error {
 	p, err := NewAttachment(name, r)
 	if err != nil {
@@ -92,25 +93,21 @@ func (m *Mail) getHeader() textproto.MIMEHeader {
 	return part
 }
 
-// Formats the mail obj for using a HTML body and returns a buffer that you can
-// render your Template to. You must call either HTMLBody or PlainTextBody.
-// If you call both, only your last call will be respected.
+// HTMLBody adds a HTML body part and returns a buffer that you can render your Template to.
 func (m *Mail) HTMLBody() io.Writer {
 	p := NewHTML()
 	m.parts = append(m.parts, p)
 	return p
 }
 
-// Formats the mail obj for using a plaintext body and returns a buffer that you
-// can render your Template to. You must call either HTMLBody or PlainTextBody.
-// If you call both, only your last call will be respected.
+// PlainTextBody adds a Plaintext body part and returns a buffer that you can render your Template to.
 func (m *Mail) PlainTextBody() io.Writer {
 	p := NewPlainText()
 	m.parts = append(m.parts, p)
 	return p
 }
 
-// Returns the fully formatted complete message as a slice of bytes.
+// Bytes returns the fully formatted complete message as a slice of bytes.
 // Triggers formatting.
 func (m *Mail) Bytes() ([]byte, error) {
 	if err := m.write(m.msg); err != nil {

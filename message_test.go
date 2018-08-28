@@ -9,17 +9,17 @@ import (
 	"testing"
 )
 
-func Message_Factory() *Mail {
+func MessageFactory() *Mail {
 	m := NewMail()
 	m.AddPerson("From", "你好 ma", "foobar@example.com")
-	m.AddAddress("To", mail.Address{"Äjna Süße", "blabla@example.com"})
-	m.AddAddress("To", mail.Address{"xiao mao", "xiao_mao@example.com"})
+	m.AddAddress("To", mail.Address{Name: "Änja Süße", Address: "blabla@example.com"})
+	m.AddAddress("To", mail.Address{Name: "xiao mao", Address: "xiao_mao@example.com"})
 	m.Subject = "你好 Änja"
 	return m
 }
 
 func Test_Message_writeHeader(t *testing.T) {
-	m := Message_Factory()
+	m := MessageFactory()
 
 	b, err := m.Bytes()
 	if err != nil {
@@ -29,7 +29,7 @@ func Test_Message_writeHeader(t *testing.T) {
 }
 
 func Test_Message_Body(t *testing.T) {
-	m := Message_Factory()
+	m := MessageFactory()
 	tmpl, err := template.ParseFiles("mailBody.html")
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func Test_Message_Body(t *testing.T) {
 }
 
 func Test_Message_Attach(t *testing.T) {
-	m := Message_Factory()
+	m := MessageFactory()
 
 	for _, name := range []string{"short_attachment.txt", "short_attachment.txt"} {
 		if err := m.AddFile(name, ""); err != nil {

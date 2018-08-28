@@ -14,7 +14,7 @@ func Example() {
 	m.AddPerson("From", "foobar", "foobar@example.com")
 
 	// you also can add mail.Address structs
-	as := mail.Address{"baz", "baz@example.com"}
+	as := mail.Address{Name: "baz", Address: "baz@example.com"}
 	m.AddAddress("To", as)
 
 	// set the subject
