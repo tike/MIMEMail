@@ -15,7 +15,6 @@ import (
 	"mime/multipart"
 	"net/smtp"
 	"net/textproto"
-	"strings"
 )
 
 // Mail represents a MIME email message and handles encoding,
@@ -30,6 +29,9 @@ type Mail struct {
 	Subject string
 
 	parts []*MIMEPart
+
+	// for testing purposes only
+	boundary string
 }
 
 // NewMail returns a new mail object ready to use.
@@ -115,10 +117,17 @@ func (m *Mail) Bytes() ([]byte, error) {
 	return msg.Bytes(), nil
 }
 
+var headerOrder = []string{"Sender", "From", "To", "Cc", "Bcc", "ReplyTo", "FollowupTo", "Subject", "MIME-Version"}
+
 func (m *Mail) writeHeader(w io.Writer) error {
 	header := m.getHeader()
-	for field, values := range header {
-		if _, err := w.Write([]byte(fmt.Sprintf("%s: %s\r\n", field, strings.Join(values, ", ")))); err != nil {
+	for _, field := range headerOrder {
+		value := header.Get(field)
+		if value == "" {
+			continue
+		}
+
+		if _, err := w.Write([]byte(fmt.Sprintf("%s: %s\r\n", field, value))); err != nil {
 			return err
 		}
 	}
@@ -130,6 +139,7 @@ func (m *Mail) writeHeader(w io.Writer) error {
 
 func (m *Mail) write(w io.Writer) error {
 	mpw := multipart.NewWriter(w)
+	m.boundary = mpw.Boundary()
 
 	if err := m.writeHeader(w); err != nil {
 		return err
