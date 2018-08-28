@@ -10,31 +10,12 @@ package MIMEMail
 
 import (
 	"bytes"
-	"encoding/base64"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/smtp"
 	"net/textproto"
-	"os"
-	"path/filepath"
 	"strings"
-)
-
-const (
-	content_type   = "Content-Type"
-	charset        = "charset"
-	mime_multipart = "multipart/mixed"
-	mime_html      = "text/html"
-	mime_text      = "text/plain"
-	mime_utf8      = "utf-8"
-
-	mime_octetstream          = "application/octet-stream"
-	content_transfer_encoding = "Content-Transfer-Encoding"
-	mime_base64               = "base64"
-
-	content_disposition = "Content-Disposition"
-	mime_attachment     = "attachment"
 )
 
 // Mail represents a MIME email message and handles encoding,
@@ -80,32 +61,22 @@ func (m *Mail) SendMail(adr string, auth smtp.Auth) error {
 }
 
 func (m *Mail) AddFile(filename, attachmentname string) error {
-	f, err := os.Open(filename)
+	p, err := NewFile(filename, attachmentname)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 
-	if attachmentname == "" {
-		attachmentname = filepath.Base(filename)
-	}
-
-	return m.AddReader(attachmentname, f)
+	m.parts = append(m.parts, p)
+	return nil
 }
 
 func (m *Mail) AddReader(name string, r io.Reader) error {
-	// Content-Type: application/octet-stream
-	// Content-Transfer-Encoding: base64
-	// Content-Disposition: attachment; filename="short_attachment.txt"
-	part := NewMIMEPart()
-	part.Set(content_type, mime_octetstream)
-	part.Set(content_transfer_encoding, mime_base64)
-	part.Set(content_disposition, fmt.Sprintf("%s; filename=%s", mime_attachment, name))
-
-	if _, err := io.Copy(base64.NewEncoder(base64.StdEncoding, part.Buffer), r); err != nil {
+	p, err := NewAttachment(name, r)
+	if err != nil {
 		return err
 	}
-	m.parts = append(m.parts, part)
+
+	m.parts = append(m.parts, p)
 	return nil
 }
 
@@ -118,27 +89,22 @@ func (m *Mail) getHeader() textproto.MIMEHeader {
 	return part
 }
 
-func (m *Mail) addPart(ct, enc string) *MIMEPart {
-	n := NewMIMEPart()
-	n.Set(content_type, fmt.Sprintf("%s; %s=%s", ct, charset, enc))
-	//n.Set(charset, enc)
-
-	m.parts = append(m.parts, n)
-	return n
-}
-
 // Formats the mail obj for using a HTML body and returns a buffer that you can
 // render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) HTMLBody() io.Writer {
-	return m.addPart(mime_html, mime_utf8)
+	p := NewHTML()
+	m.parts = append(m.parts, p)
+	return p
 }
 
 // Formats the mail obj for using a plaintext body and returns a buffer that you
 // can render your Template to. You must call either HTMLBody or PlainTextBody.
 // If you call both, only your last call will be respected.
 func (m *Mail) PlainTextBody() io.Writer {
-	return m.addPart(mime_text, mime_utf8)
+	p := NewPlainText()
+	m.parts = append(m.parts, p)
+	return p
 }
 
 // Returns the fully formatted complete message as a slice of bytes.
