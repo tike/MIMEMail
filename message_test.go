@@ -2,6 +2,7 @@ package MIMEMail
 
 import (
 	//"bytes"
+	"bytes"
 	"html/template"
 	"net/mail"
 
@@ -30,7 +31,7 @@ func Test_Message_writeHeader(t *testing.T) {
 
 func Test_Message_Body(t *testing.T) {
 	m := MessageFactory()
-	tmpl, err := template.ParseFiles("mailBody.html")
+	tmpl, err := template.New("body").Parse(htmlBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,13 +51,11 @@ func Test_Message_Body(t *testing.T) {
 func Test_Message_Attach(t *testing.T) {
 	m := MessageFactory()
 
-	for _, name := range []string{"short_attachment.txt", "short_attachment.txt"} {
-		if err := m.AddFile(name, ""); err != nil {
-			t.Fatalf("opening attachment: %s", err)
-		}
+	if err := m.AddReader("short_attachment.txt", bytes.NewBuffer([]byte(shortAttachment))); err != nil {
+		t.Fatalf("opening attachment: %s", err)
 	}
 
-	tmpl, err := template.ParseFiles("mailBody.html")
+	tmpl, err := template.New("body").Parse(htmlBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,3 +71,24 @@ func Test_Message_Attach(t *testing.T) {
 
 	t.Log("\n", string(b))
 }
+
+const (
+	htmlBody = `{{ define "body" }}<html>
+	<body>
+		<h1 id="bla">你好 world!</h1>
+		<p>I heard you like MIME Mails, so I put</p>
+		<ul>
+	        <li>MIMEHeader in your Mailbody</li>
+		</ul>
+		<p>So that you can</p>
+		<ul>
+			<li>send MIMEparts while you Multipart</li>
+		</ul>
+		<p>you have been pimped!</p>
+	</body>
+	</html>
+	{{ end }}`
+
+	shortAttachment = `I'm a short attachment!
+`
+)
