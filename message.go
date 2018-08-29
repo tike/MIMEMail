@@ -15,6 +15,9 @@ import (
 	"mime/multipart"
 	"net/smtp"
 	"net/textproto"
+
+	"golang.org/x/crypto/openpgp"
+	"golang.org/x/crypto/openpgp/packet"
 )
 
 // Mail represents a MIME email message and handles encoding,
@@ -137,13 +140,9 @@ func (m *Mail) writeHeader(w io.Writer) error {
 	return nil
 }
 
-func (m *Mail) write(w io.Writer) error {
+func (m *Mail) writeBody(w io.Writer) error {
 	mpw := multipart.NewWriter(w)
 	m.boundary = mpw.Boundary()
-
-	if err := m.writeHeader(w); err != nil {
-		return err
-	}
 
 	w.Write([]byte(fmt.Sprintf("%s: %s; boundary=%s\r\n\r\n", content_type, mime_multipart, mpw.Boundary())))
 
@@ -158,7 +157,15 @@ func (m *Mail) write(w io.Writer) error {
 		}
 	}
 
-	if err := mpw.Close(); err != nil {
+	return mpw.Close()
+}
+
+func (m *Mail) write(w io.Writer) error {
+	if err := m.writeHeader(w); err != nil {
+		return err
+	}
+
+	if err := m.writeBody(w); err != nil {
 		return err
 	}
 
@@ -169,4 +176,62 @@ func (m *Mail) write(w io.Writer) error {
 // Triggers formatting.
 func (m *Mail) WriteTo(w io.Writer) error {
 	return m.write(w)
+}
+
+// Encrypt encrypts the mail with PGPMIME use CreateEntity to obtain recpient entities and CreateSigningEntity to obtain the signing entity.
+// If signer is nil, the mail will simply not be signed. If fileHints and/or cnf are nil, sane defaults will be used.
+func (m *Mail) Encrypt(to []*openpgp.Entity, signer *openpgp.Entity, fileHints *openpgp.FileHints, cnf *packet.Config) ([]byte, error) {
+	var b bytes.Buffer
+	if err := m.WriteEncrypted(&b, to, signer, fileHints, cnf); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// WriteEncrypted encrypts the mail with PGPMIME use CreateEntity to obtain recpient entities and CreateSigningEntity to obtain the signing entity.
+// If signer is nil, the mail will simply not be signed. If fileHints and/or cnf are nil, sane defaults will be used.
+func (m *Mail) WriteEncrypted(w io.Writer, to []*openpgp.Entity, signer *openpgp.Entity, fileHints *openpgp.FileHints, cnf *packet.Config) error {
+	if err := m.writeHeader(w); err != nil {
+		return err
+	}
+
+	mpw := multipart.NewWriter(w)
+	pgpMIMEheader := fmt.Sprintf("%s: %s; protocol=%q; boundary=%q\r\n\r\n",
+		content_type, "multipart/encrypted", "application/pgp-encrypted", mpw.Boundary())
+	if _, err := w.Write([]byte(pgpMIMEheader)); err != nil {
+		return err
+	}
+
+	pgpVersion := NewPGPVersion()
+	pgpVersionBody, err := mpw.CreatePart(pgpVersion.MIMEHeader)
+	if err != nil {
+		return err
+	}
+	if _, err := pgpVersionBody.Write(pgpVersion.Bytes()); err != nil {
+		return err
+	}
+
+	pgpBody := NewPGPBody()
+	pgpBodyPart, err := mpw.CreatePart(pgpBody.MIMEHeader)
+	if err != nil {
+		return err
+	}
+
+	plainTextWriter, err := Encrypt(pgpBodyPart, to, signer, fileHints, cnf)
+	if err != nil {
+		return err
+	}
+
+	if err := m.writeBody(plainTextWriter); err != nil {
+		return err
+	}
+
+	if err := plainTextWriter.Close(); err != nil {
+		return err
+	}
+	if _, err := pgpBodyPart.Write([]byte("\r\n")); err != nil {
+		return err
+	}
+
+	return mpw.Close()
 }

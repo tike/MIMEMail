@@ -58,6 +58,21 @@ func NewPlainText() *MIMEPart {
 	return NewPart(mime_text, mime_utf8)
 }
 
+func NewPGPVersion() *MIMEPart {
+	p := NewMIMEPart()
+	p.Set(content_type, "application/pgp-encrypted")
+	p.Set(content_disposition, "PGP/MIME version identification")
+	p.WriteString("Version: 1\r\n")
+	return p
+}
+
+func NewPGPBody() *MIMEPart {
+	p := NewMIMEPart()
+	p.Set(content_type, "application/pgp-encrypted")
+	p.Set(content_disposition, `inline; filename="encrypted.asc"`)
+	return p
+}
+
 // NewAttachment creates a new MIMEPart with all the necessary headers set.
 func NewAttachment(name string, r io.Reader) (*MIMEPart, error) {
 	// Content-Type: application/octet-stream
