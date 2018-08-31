@@ -1,0 +1,6 @@
+{{define "subject"}}Hello {{ .Name }}{{end}}
+
+{{define "body"}}<body>
+  <h1> Welcome to <span class="highlight">{{ .Company }}</span>!</h1>
+  <p>lorem ipsum dolor si ament...</p>
+</body>{{end}}
