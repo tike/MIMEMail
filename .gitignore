@@ -1,4 +1,3 @@
 account_test.go
-account_test.go.gpg
-account_test.go.asc
-
+*.gpg
+*.asc

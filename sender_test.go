@@ -8,8 +8,8 @@ import (
 
 func getTestMail(t *testing.T, cnf *testConf) *Mail {
 	m := NewMail()
-	m.From("MIMEMail test client", cnf.sender.address)
-	m.To("MIMEMail recipient", cnf.receiver.address)
+	m.From("MIMEMail test client", cnf.sender.Address)
+	m.To("MIMEMail recipient", cnf.receiver.Address)
 
 	m.Subject = "Test mail from MIMEMail"
 
@@ -28,7 +28,7 @@ func getTestMail(t *testing.T, cnf *testConf) *Mail {
 }
 
 func TestTLSClientConnect(t *testing.T) {
-	s, err := TLSClient(getTestConfig(t).Config)
+	s, err := TLSClient(getTestConfig(t).sender)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +44,7 @@ func TestTLSClientSend(t *testing.T) {
 
 	m := getTestMail(t, cnf)
 
-	c, err := TLSClient(cnf.Config)
+	c, err := TLSClient(cnf.sender)
 	if err != nil {
 		t.Fatal(err)
 	}

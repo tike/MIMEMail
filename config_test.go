@@ -3,20 +3,8 @@ package MIMEMail
 import "testing"
 
 type testConf struct {
-	*Config
-	sender   sender
-	receiver receiver
-}
-
-type sender struct {
-	address string
-	key     string
-	pass    string
-}
-
-type receiver struct {
-	address string
-	key     string
+	sender   *Account
+	receiver *Account
 }
 
 var testConfig *testConf

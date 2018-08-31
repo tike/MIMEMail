@@ -14,36 +14,11 @@ const (
 	SMTPStartTLS = "587"
 )
 
-// Config bundles the relevant bits of information
-type Config struct {
-	Host string
-	Port string
-	Auth smtp.Auth
-
-	TLSConf *tls.Config
-}
-
-// String implements fmt.Stringer
-func (c Config) String() string {
-	return c.Net()
-}
-
-// Net returns Host:Port
-func (c Config) Net() string {
-	return fmt.Sprintf("%s:%s", c.Host, c.Port)
-}
-
-// TLSConfig returns the tls.Config (or a sane default if TLSConfig is nil)
-func (c *Config) TLSConfig() *tls.Config {
-	if c.TLSConf != nil {
-		return c.TLSConf
-	}
-	return &tls.Config{ServerName: c.Host}
-}
-
-// Client establisches a TLSConnection and handles sending the MIME Message(s).
+// Client establishes a connection and handles sending the MIME Message(s).
 type Client struct {
 	*smtp.Client
+	cnf *Account
+	tls bool
 }
 
 // TLSClient establishes a TLSConnection to the Server described by config,
@@ -51,37 +26,73 @@ type Client struct {
 // If an error occurs, the server connection will be closed and the error returned.
 // When you want to run the test, remember to export the necessary env vars to inject
 // your config.
-func TLSClient(cnf *Config) (*Client, error) {
-	tlsCon, err := tls.Dial("tcp", cnf.Net(), cnf.TLSConfig())
+func TLSClient(cnf *Account) (*Client, error) {
+	var config *tls.Config
+	if cnf.Server.Config == nil {
+		config = &tls.Config{ServerName: cnf.Server.Host}
+	}
+	tlsCon, err := tls.Dial("tcp", cnf.Server.Addr(), config)
 	if err != nil {
 		return nil, err
 	}
 
-	c, err := smtp.NewClient(tlsCon, cnf.Host)
+	c, err := smtp.NewClient(tlsCon, cnf.Server.Addr())
 	if err != nil {
 		return nil, err
 	}
 
-	if err = c.Hello("localhost"); err != nil {
+	return &Client{Client: c, cnf: cnf, tls: true}, nil
+}
+
+// PlainClient uses the standard smtp.Dail, so an unencrypted connection will
+// be used.
+func PlainClient(cnf *Account) (*Client, error) {
+	c, err := smtp.Dial(cnf.Server.Addr())
+	if err != nil {
+		return nil, err
+	}
+
+	return &Client{Client: c, cnf: cnf}, nil
+}
+
+func (c Client) prolog() error {
+	if err := c.Hello("localhost"); err != nil {
 		c.Quit()
-		return nil, err
+		return err
+	}
+
+	if !c.tls {
+		if ok, _ := c.Extension("STARTTLS"); ok {
+			var config *tls.Config
+			if c.cnf.Server.Config == nil {
+				config = &tls.Config{ServerName: c.cnf.Server.Host}
+			}
+			if err := c.StartTLS(config); err != nil {
+				return err
+			}
+		}
 	}
 
 	ok, extra := c.Extension("AUTH")
 	if !ok {
 		c.Quit()
-		return nil, fmt.Errorf("no auth: %t %s", ok, extra)
+		return fmt.Errorf("no auth: %t %s", ok, extra)
 	}
 
-	if err = c.Auth(cnf.Auth); err != nil {
+	if err := c.Auth(c.cnf.Auth()); err != nil {
 		c.Quit()
+		return err
+	}
+
+	return nil
+}
+
+// W sets up the connection for mail sending
+func (c Client) W(from string, to []string) (io.WriteCloser, error) {
+	if err := c.prolog(); err != nil {
 		return nil, err
 	}
 
-	return &Client{Client: c}, nil
-}
-
-func (c Client) W(from string, to []string) (io.WriteCloser, error) {
 	if err := c.Mail(from); err != nil {
 		return nil, err
 	}

@@ -5,9 +5,6 @@ import (
 	"html/template"
 	"net/mail"
 	"net/smtp"
-	"strings"
-
-	"golang.org/x/crypto/openpgp"
 )
 
 func Example() {
@@ -26,12 +23,12 @@ func Example() {
 
 	tmpl, err := template.ParseFiles("mailBody.html")
 	if err != nil {
-		return
+		fmt.Println(err)
 	}
 
 	// render your template into the mail body
 	if err = tmpl.ExecuteTemplate(m.HTMLBody(), "body", nil); err != nil {
-		return
+		fmt.Println(err)
 	}
 
 	auth := smtp.PlainAuth("", "foobar@example.com", "foobars password", "mail.example.com")
@@ -42,41 +39,59 @@ func Example() {
 	}
 
 	// alternatively, send the mail via TLSClient
-	cnf := &Config{
-		Host: "mail.example.com",
-		Port: "465",
-		Auth: auth,
+	cnf := &Account{
+		Name: "foo bar",
+
+		Address: "mail@example.com",
+		Pass:    "foobars password",
+
+		Server: &Server{
+			Host: "mail.example.com",
+			Port: "465",
+		},
 	}
+
 	c, err := TLSClient(cnf)
 	if err != nil {
-		return
+		fmt.Println(err)
 	}
 
 	if err := c.Send(m); err != nil {
-		return
+		fmt.Println(err)
 	}
 }
 
-func ExampleMail_WriteEncrypted() {
-	receiver := "receiver@example.com"
-	recv, err := CreateEntity(receiver, strings.NewReader(`-----BEGIN PGP PUBLIC KEY BLOCK-----`))
-	if err != nil {
-		fmt.Println(err)
+func Example_Encrypt() {
+	sender := &Account{
+		Name:    "Mr. Sender",
+		Address: "sender@example.com",
+		Pass:    "sender's mail account password",
+
+		Key: &PGP{
+			File: "sender.asc",
+			Pass: "sender's key password",
+		},
+
+		Server: &Server{
+			Host: "mail.example.com",
+			Port: "465",
+		},
 	}
 
-	sender := "sender@example.com"
-	signer, err := CreateSigningEntity(sender, strings.NewReader(`-----BEGIN PGP PRIVATE KEY BLOCK-----`), "password")
-	if err != nil {
-		fmt.Println(err)
+	recipient := &Account{
+		Name:    "Mr. Receiver",
+		Address: "receiver@example.com",
+
+		Key: &PGP{
+			File: "receiver.asc",
+		},
 	}
 
 	m := NewMail()
 
-	// just to make output predictable, please ignore
-	m.boundary = "1234567890abcdefghijklmnop"
-
-	m.To("Mr. Receiver", receiver)
-	m.From("Mr. Sender", sender)
+	// setup the mail, use which ever syntax fits you better
+	m.ToAddr(recipient.Addr())
+	m.From(sender.Name, sender.Address)
 	m.Subject = "PGP test mail"
 
 	bodyContent := `
@@ -85,13 +100,89 @@ func ExampleMail_WriteEncrypted() {
 			<h1>Hello Mr. Receiver!</h1>
 		</body>
 	</html>`
-	if _, err = m.HTMLBody().Write([]byte(bodyContent)); err != nil {
+	if _, err := m.HTMLBody().Write([]byte(bodyContent)); err != nil {
 		fmt.Println(err)
 	}
 
-	cipherText, err := m.Encrypt([]*openpgp.Entity{recv}, signer, nil, nil)
+	cipherText, err := m.Encrypt(recipient, sender)
 	if err != nil {
 		fmt.Println(err)
 	}
-	fmt.Println(string(cipherText))
+
+	from, err := m.EffectiveSender()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	c, err := TLSClient(sender)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	if err := c.Write(from, m.Recipients(), cipherText); err != nil {
+		fmt.Println(err)
+	}
+}
+
+func Example_WriteEncrypted() {
+	sender := &Account{
+		Name:    "Mr. Sender",
+		Address: "sender@example.com",
+		Pass:    "sender's mail account password",
+
+		Key: &PGP{
+			File: "sender.asc",
+			Pass: "sender's key password",
+		},
+
+		Server: &Server{
+			Host: "mail.example.com",
+			Port: "465",
+		},
+	}
+
+	recipient := &Account{
+		Name:    "Mr. Receiver",
+		Address: "receiver@example.com",
+
+		Key: &PGP{
+			File: "receiver.asc",
+		},
+	}
+
+	m := NewMail()
+
+	// setup the mail, use which ever syntax fits you better
+	m.ToAddr(recipient.Addr())
+	m.From(sender.Name, sender.Address)
+	m.Subject = "PGP test mail"
+
+	bodyContent := `
+	<html>
+		<body>
+			<h1>Hello Mr. Receiver!</h1>
+		</body>
+	</html>`
+	if _, err := m.HTMLBody().Write([]byte(bodyContent)); err != nil {
+		fmt.Println(err)
+	}
+
+	from, err := m.EffectiveSender()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	c, err := TLSClient(sender)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	out, err := c.W(from, m.Recipients())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	if err := m.WriteEncrypted(out, recipient, sender); err != nil {
+		fmt.Println(err)
+	}
 }

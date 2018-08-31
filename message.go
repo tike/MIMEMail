@@ -15,9 +15,6 @@ import (
 	"mime/multipart"
 	"net/smtp"
 	"net/textproto"
-
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/packet"
 )
 
 // Mail represents a MIME email message and handles encoding,
@@ -180,9 +177,9 @@ func (m *Mail) WriteTo(w io.Writer) error {
 
 // Encrypt encrypts the mail with PGPMIME use CreateEntity to obtain recpient entities and CreateSigningEntity to obtain the signing entity.
 // If signer is nil, the mail will simply not be signed. If fileHints and/or cnf are nil, sane defaults will be used.
-func (m *Mail) Encrypt(to []*openpgp.Entity, signer *openpgp.Entity, fileHints *openpgp.FileHints, cnf *packet.Config) ([]byte, error) {
+func (m *Mail) Encrypt(to *Account, signer *Account) ([]byte, error) {
 	var b bytes.Buffer
-	if err := m.WriteEncrypted(&b, to, signer, fileHints, cnf); err != nil {
+	if err := m.WriteEncrypted(&b, to, signer); err != nil {
 		return nil, err
 	}
 	return b.Bytes(), nil
@@ -190,7 +187,7 @@ func (m *Mail) Encrypt(to []*openpgp.Entity, signer *openpgp.Entity, fileHints *
 
 // WriteEncrypted encrypts the mail with PGPMIME use CreateEntity to obtain recpient entities and CreateSigningEntity to obtain the signing entity.
 // If signer is nil, the mail will simply not be signed. If fileHints and/or cnf are nil, sane defaults will be used.
-func (m *Mail) WriteEncrypted(w io.Writer, to []*openpgp.Entity, signer *openpgp.Entity, fileHints *openpgp.FileHints, cnf *packet.Config) error {
+func (m *Mail) WriteEncrypted(w io.Writer, to *Account, signer *Account) error {
 	if err := m.writeHeader(w); err != nil {
 		return err
 	}
@@ -217,7 +214,7 @@ func (m *Mail) WriteEncrypted(w io.Writer, to []*openpgp.Entity, signer *openpgp
 		return err
 	}
 
-	plainTextWriter, err := Encrypt(pgpBodyPart, to, signer, fileHints, cnf)
+	plainTextWriter, err := Encrypt(pgpBodyPart, to, signer)
 	if err != nil {
 		return err
 	}

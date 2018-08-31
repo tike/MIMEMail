@@ -2,25 +2,14 @@ package MIMEMail
 
 import (
 	"bytes"
-	"crypto"
-	"strings"
 	"testing"
-
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/packet"
 )
 
 func TestPGPRead(t *testing.T) {
 	cnf := getTestConfig(t)
-	e, err := CreateEntity(cnf.receiver.address, strings.NewReader(cnf.receiver.key))
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	out := bytes.NewBuffer(nil)
-	plain, err := Encrypt(out, []*openpgp.Entity{e}, nil, nil, &packet.Config{
-		DefaultHash: crypto.SHA256,
-	})
+	plain, err := Encrypt(out, cnf.receiver, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,17 +24,8 @@ func TestPGPRead(t *testing.T) {
 func TestPGPSend(t *testing.T) {
 	cnf := getTestConfig(t)
 	m := getTestMail(t, cnf)
-	recv, err := CreateEntity(cnf.receiver.address, strings.NewReader(cnf.receiver.key))
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	signer, err := CreateSigningEntity("", strings.NewReader(cnf.sender.key), cnf.sender.pass)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	c, err := TLSClient(cnf.Config)
+	c, err := TLSClient(cnf.sender)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +41,7 @@ func TestPGPSend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := m.WriteEncrypted(out, []*openpgp.Entity{recv}, signer, nil, nil); err != nil {
+	if err := m.WriteEncrypted(out, cnf.receiver, cnf.sender); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -71,19 +51,9 @@ func TestPGPEncrypt(t *testing.T) {
 
 	m := getTestMail(t, cnf)
 
-	recv, err := CreateEntity(m.Addresses[AddrTo][0].Address, strings.NewReader(cnf.receiver.key))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	signer, err := CreateSigningEntity("", strings.NewReader(cnf.sender.key), cnf.sender.pass)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	out := bytes.NewBuffer(nil)
 
-	if err := m.WriteEncrypted(out, []*openpgp.Entity{recv}, signer, nil, nil); err != nil {
+	if err := m.WriteEncrypted(out, cnf.receiver, cnf.sender); err != nil {
 		t.Fatal(err)
 	}
 

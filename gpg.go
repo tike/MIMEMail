@@ -48,19 +48,24 @@ func UnPackPrivateKey(r io.Reader) (*packet.PrivateKey, error) {
 	return pubKey, nil
 }
 
-// AddrToPGPUserID converts the given mail.Address into a pgp.UserId.
-func AddrToPGPUserID(addr mail.Address) *packet.UserId {
+// addrToPGPUserID converts the given mail.Address into a pgp.UserId.
+func addrToPGPUserID(addr mail.Address) *packet.UserId {
 	return packet.NewUserId(addr.Name, "", addr.Address)
 }
 
-// CreateEntity creates a reciepient entity using the given address and
-// ASCII armored key read from key.
-func CreateEntity(addr string, key io.Reader) (*openpgp.Entity, error) {
+// CreateEntity creates a reciepient entity using the given account.
+func CreateEntity(a *Account) (*openpgp.Entity, error) {
+	key, err := a.Key.Open()
+	if err != nil {
+		return nil, err
+	}
+
 	pubKey, err := UnpackKey(key)
 	if err != nil {
 		return nil, err
 	}
-	userID := AddrToPGPUserID(mail.Address{})
+
+	userID := addrToPGPUserID(mail.Address{})
 	prim := true
 
 	return &openpgp.Entity{
@@ -84,20 +89,24 @@ func CreateEntity(addr string, key io.Reader) (*openpgp.Entity, error) {
 	}, nil
 }
 
-// CreateSigningEntity creates a signing entity with the given address and ASCII armor'ed
-// key in (decrypting it using pass, if it is encrypted).
-func CreateSigningEntity(addr string, key io.Reader, pass string) (*openpgp.Entity, error) {
+// CreateSigningEntity creates a signing entity for the given Account
+func CreateSigningEntity(a *Account) (*openpgp.Entity, error) {
+	key, err := a.Key.Open()
+	if err != nil {
+		return nil, err
+	}
+
 	privKey, err := UnPackPrivateKey(key)
 	if err != nil {
 		return nil, err
 	}
 	if privKey.Encrypted {
-		if err := privKey.Decrypt([]byte(pass)); err != nil {
+		if err := privKey.Decrypt([]byte(a.Key.Pass)); err != nil {
 			return nil, err
 		}
 	}
 
-	userID := AddrToPGPUserID(mail.Address{})
+	userID := addrToPGPUserID(mail.Address{})
 	prim := true
 	return &openpgp.Entity{
 		PrimaryKey: &privKey.PublicKey,
@@ -126,14 +135,31 @@ func newASCIIArmorer(w io.Writer) (io.WriteCloser, error) {
 	return armor.Encode(w, "PGP MESSAGE", nil)
 }
 
-// Encrypt encrypts (and ASCII armor encodes) the data written to the returned writer. Remember to Close the writer when you are done.
-func Encrypt(out io.Writer, to []*openpgp.Entity, signer *openpgp.Entity, fileHints *openpgp.FileHints, cnf *packet.Config) (io.WriteCloser, error) {
+// Encrypt encrypts (and ASCII armor encodes) the data written to the returned writer
+// Remember to Close the writer when you are done.
+func Encrypt(out io.Writer, to *Account, signer *Account) (io.WriteCloser, error) {
+	enc, err := CreateEntity(to)
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		sign   *openpgp.Entity
+		config *packet.Config
+	)
+	if signer != nil {
+		if sign, err = CreateSigningEntity(signer); err != nil {
+			return nil, err
+		}
+		config = signer.Key.Config
+	}
+
 	arm, err := newASCIIArmorer(out)
 	if err != nil {
 		return nil, err
 	}
 
-	plain, err := openpgp.Encrypt(arm, to, signer, fileHints, cnf)
+	plain, err := openpgp.Encrypt(arm, []*openpgp.Entity{enc}, sign, nil, config)
 	if err != nil {
 		return nil, err
 	}
