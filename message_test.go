@@ -8,6 +8,8 @@ import (
 
 	//"os"
 	"testing"
+
+	"github.com/tike/MIMEMail/templated"
 )
 
 func MessageFactory() *Mail {
@@ -199,3 +201,24 @@ const (
 	shortAttachment = `I'm a short attachment!
 `
 )
+
+func TestMailTemplated(t *testing.T) {
+	cnf := templated.Config{Dir: "templated/example", Lang: "en_US"}
+	ctx := map[string]interface{}{
+		"Name":    "Mr. Receiver",
+		"Company": "MIMEMail",
+	}
+	m, err := NewTemplated(&cnf, "foo", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.To("Mr. Receiver", "receiver@example.com")
+	m.From("Mr. Sender", "sender@example.com")
+
+	out, err := m.Bytes()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log(string(out))
+}

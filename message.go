@@ -15,6 +15,8 @@ import (
 	"mime/multipart"
 	"net/smtp"
 	"net/textproto"
+
+	"github.com/tike/MIMEMail/templated"
 )
 
 // Mail represents a MIME email message and handles encoding,
@@ -40,6 +42,23 @@ func NewMail() *Mail {
 		Addresses: NewAddresses(),
 		parts:     make([]*MIMEPart, 0, 1),
 	}
+}
+
+// NewTemplated renders the template specified
+func NewTemplated(cnf *templated.Config, name string, data interface{}) (*Mail, error) {
+	subj, body, err := templated.Render(cnf, name, data)
+	if err != nil {
+		return nil, err
+	}
+
+	m := NewMail()
+	m.Subject = subj
+
+	bodyPart := NewHTML()
+	bodyPart.Buffer = bytes.NewBuffer(body)
+	m.parts = append(m.parts, bodyPart)
+
+	return m, nil
 }
 
 // SendMail sends the mail via smtp.SendMail (which uses StartTLS if available).
