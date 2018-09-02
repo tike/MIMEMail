@@ -58,6 +58,8 @@ func NewPlainText() *MIMEPart {
 	return NewPart(mime_text, mime_utf8)
 }
 
+
+// NewPGPVersion creates a new PGP/MIME Version header.
 func NewPGPVersion() *MIMEPart {
 	p := NewMIMEPart()
 	p.Set(content_type, "application/pgp-encrypted")
@@ -66,6 +68,7 @@ func NewPGPVersion() *MIMEPart {
 	return p
 }
 
+// NewPGPBody creates a PGP/MIME message body part.
 func NewPGPBody() *MIMEPart {
 	p := NewMIMEPart()
 	p.Set(content_type, "application/pgp-encrypted")
@@ -89,7 +92,10 @@ func NewAttachment(name string, r io.Reader) (*MIMEPart, error) {
 	return p, nil
 }
 
-// NewFile creates a new Mail attackment MIMEPart with all the necessary headers set.
+// NewFile creates a new File attachment MIMEPart with all the necessary headers set.
+// If you pass a string as the optional attachment argument, it will be used as the
+// filename for sending the attachment, if no such argument is passed, filepath.Base(file)
+// will be used.
 func NewFile(file string, attachment ...string) (*MIMEPart, error) {
 	f, err := os.Open(file)
 	if err != nil {
@@ -97,9 +103,9 @@ func NewFile(file string, attachment ...string) (*MIMEPart, error) {
 	}
 	defer f.Close()
 
-	var attachmentname string
-	if attachment == nil {
-		attachmentname = filepath.Base(file)
+	attachmentname := filepath.Base(file)
+	if len(attachment) != 0 {
+		attachmentname = attachment[0]
 	}
 
 	return NewAttachment(attachmentname, f)

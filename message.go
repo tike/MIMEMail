@@ -1,11 +1,3 @@
-// Package MIMEMail provides convenient formatting (and sending) of MIME formatted emails.
-//
-// Simply create a new Mail struct with NewMail(), add Recipients (To, Cc, Bcc, etc). Set
-// the Subject, add Attachments (by filename), get a Writer for the body
-// by calling HTMLBody() or PlainTextBody() and render your template into it.
-// Finally call Bytes() to obtain the formatted email or WriteTo() to directly
-// write it to a Writer or send it directly (via smtp.SendMail) through the
-// Mail.SendMail() method.
 package MIMEMail
 
 import (
@@ -44,7 +36,9 @@ func NewMail() *Mail {
 	}
 }
 
-// NewTemplated renders the template specified
+// NewTemplated renders the template specified by config and name using data as the
+// rendering context. The results will be put into the Subject and HTMLBody of the
+//  returned Mail struct.
 func NewTemplated(cnf *templated.Config, name string, data interface{}) (*Mail, error) {
 	subj, body, err := templated.Render(cnf, name, data)
 	if err != nil {
@@ -129,7 +123,7 @@ func (m *Mail) PlainTextBody() io.Writer {
 }
 
 // Bytes returns the fully formatted complete message as a slice of bytes.
-// Triggers formatting.
+// This is for plain MIME mails, if you want a PGP/MIME encrypted mail, use the Encrypt method instead.
 func (m *Mail) Bytes() ([]byte, error) {
 	msg := bytes.NewBuffer(nil)
 	if err := m.write(msg); err != nil {
@@ -189,13 +183,13 @@ func (m *Mail) write(w io.Writer) error {
 }
 
 // WriteTo writes the fully formatted complete message to the given writer.
-// Triggers formatting.
+// This is for plain MIME mails, if you want a PGP/MIME encrypted mail, use the WriteEncrypted method instead.
 func (m *Mail) WriteTo(w io.Writer) error {
 	return m.write(w)
 }
 
-// Encrypt encrypts the mail with PGPMIME use CreateEntity to obtain recpient entities and CreateSigningEntity to obtain the signing entity.
-// If signer is nil, the mail will simply not be signed. If fileHints and/or cnf are nil, sane defaults will be used.
+// Encrypt encrypts the mail with PGP/MIME using CreateEntity to obtain recpient and CreateSigningEntity to obtain the signing entity.
+// If signer is nil, the mail will simply not be signed. The Key Fields of both to and signer must be non-nil.
 func (m *Mail) Encrypt(to *Account, signer *Account) ([]byte, error) {
 	var b bytes.Buffer
 	if err := m.WriteEncrypted(&b, to, signer); err != nil {
@@ -204,8 +198,8 @@ func (m *Mail) Encrypt(to *Account, signer *Account) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// WriteEncrypted encrypts the mail with PGPMIME use CreateEntity to obtain recpient entities and CreateSigningEntity to obtain the signing entity.
-// If signer is nil, the mail will simply not be signed. If fileHints and/or cnf are nil, sane defaults will be used.
+// WriteEncrypted encrypts the mail with PGP/MIME using CreateEntity to obtain the recpient and CreateSigningEntity to obtain the signing entity.
+// If signer is nil, the mail will simply not be signed. The Key Fields of both to and signer must be non-nil.
 func (m *Mail) WriteEncrypted(w io.Writer, to *Account, signer *Account) error {
 	if err := m.writeHeader(w); err != nil {
 		return err

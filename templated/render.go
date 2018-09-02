@@ -1,3 +1,12 @@
+//Package templated implements a lightweight mail templating mechanism.
+//
+// Store your templates in dir "A", then Render will execute "A/base/index.html" as the main template
+// for the mail body, adding any other files in "A/base" as helper templates, stylesheets, images etc.
+// Other subfolders of "A", e.g. "A/en_US" should contain one file per templated message.
+// These files should define 2 templates:
+// "subject" and "body" (using the {{ define 'name"}} ... {{end}} syntax).
+//
+// See the tests and the "example" folder for a demonstration.
 package templated
 
 import (
@@ -15,10 +24,13 @@ type Config struct {
 	Dir string
 
 	// Lang names the language subfolder of Dir in which the file containing
+	// the message specific templates named "subject" and "body" are located.
 	Lang string
 }
 
-// Render renders a template mail to the given account
+// Render renders the template c.Dir/c.Lang/name in the context of c.Dir/base/index.html.
+//
+// See the tests and the "example" folder for a demonstration.
 func Render(c *Config, name string, data interface{}) (string, []byte, error) {
 	tmpl, err := template.ParseGlob(filepath.Join(c.Dir, "base", "*"))
 	if err != nil {

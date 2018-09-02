@@ -5,9 +5,11 @@ import (
 	"html/template"
 	"net/mail"
 	"net/smtp"
+
+	"github.com/tike/MIMEMail/templated"
 )
 
-func Example() {
+func Example_mime() {
 	// create the Mail
 	m := NewMail()
 
@@ -61,7 +63,7 @@ func Example() {
 	}
 }
 
-func Example_Encrypt() {
+func Example_pgp() {
 	sender := &Account{
 		Name:    "Mr. Sender",
 		Address: "sender@example.com",
@@ -124,7 +126,41 @@ func Example_Encrypt() {
 	}
 }
 
-func Example_WriteEncrypted() {
+func Example_templated() {
+	sender := &Account{
+		Name:    "Mr. Sender",
+		Address: "sender@example.com",
+		Pass:    "sender's mail account password",
+
+		Key: &PGP{
+			File: "sender.asc",
+			Pass: "sender's key password",
+		},
+
+		Server: &Server{
+			Host: "mail.example.com",
+			Port: "465",
+		},
+	}
+
+	cnf := templated.Config{Dir: "templated/example", Lang: "en_US"}
+	ctx := map[string]interface{}{
+		"Name":    "Mr. Receiver",
+		"Company": "MIMEMail",
+	}
+	m, err := NewTemplated(&cnf, "foo", ctx)
+	if err != nil {
+		return
+	}
+	m.To("Mr. Receiver", "receiver@example.com")
+	m.From("Mr. Sender", "sender@example.com")
+
+	if err := m.SendMail("mail.example.com", sender.Auth()); err != nil {
+		return
+	}
+}
+
+func ExampleMail_WriteEncrypted() {
 	sender := &Account{
 		Name:    "Mr. Sender",
 		Address: "sender@example.com",

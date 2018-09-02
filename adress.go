@@ -28,7 +28,7 @@ func NewAddresses() Addresses {
 }
 
 // Recipients returns just the mailaddresses of all the recipients
-// (To, Cc, Bcc), ready to be passed to smtp.SendMail et al. for your convenience.
+// (To, Cc, Bcc), ready to be passed to smtp.SendMail et al.
 func (a Addresses) Recipients() []string {
 	to := make([]string, 0, 10)
 	for _, field := range []AddressHeader{AddrTo, AddrCc, AddrBcc} {
@@ -41,8 +41,8 @@ func (a Addresses) Recipients() []string {
 	return to
 }
 
-// EffectiveSender returns the first sender entry, if there is none it returns
-// the first from entry, if there is none it returns NoSender error
+// EffectiveSender returns the first "sender" entry, if there is none it returns
+// the "first" from entry, if that is empty it returns a NoSender error.
 func (a Addresses) EffectiveSender() (string, error) {
 	if sender, ok := a[AddrSender]; ok {
 		if len(sender) > 0 {
@@ -128,15 +128,17 @@ func (a *Addresses) FollowupToAddr(address mail.Address) error {
 }
 
 // AddPerson adds the given details to the given mail header field.
-// Field should be a valid address field. Use the predefined Addr... constants.
-// Adding the will fail if the field is not one of the predefined constants.
+// Field should be a valid address field. Use the predefined Addr... constants or
+// the corresponding methods.
+// Adding the address will fail if the field is not one of the predefined constants.
 func (a *Addresses) AddPerson(field AddressHeader, name, address string) error {
 	return a.AddAddress(field, mail.Address{Name: name, Address: address})
 }
 
-// AddAddress a recipient to your mail Header.
-// Field should be a valid address field. Use the predefined Addr... constants.
-// Adding the will fail if the field is not one of the predefined constants.
+// AddAddress adds a recipient to your mail Header.
+// Field should be a valid address field. Use the predefined Addr... constants or
+// the corresponding methods.
+// Adding the address will fail if field is not one of the predefined constants.
 func (a *Addresses) AddAddress(field AddressHeader, address mail.Address) error {
 	if !valid(field) {
 		return InvalidField(field)

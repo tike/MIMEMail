@@ -21,11 +21,7 @@ type Client struct {
 	tls bool
 }
 
-// TLSClient establishes a TLSConnection to the Server described by config,
-// performs the Hello() and Auth() calls and returns the "ready to send" server.
-// If an error occurs, the server connection will be closed and the error returned.
-// When you want to run the test, remember to export the necessary env vars to inject
-// your config.
+// TLSClient establishes a TLSConnection to the Server described by config.
 func TLSClient(cnf *Account) (*Client, error) {
 	var config *tls.Config
 	if cnf.Server.Config == nil {
@@ -45,7 +41,8 @@ func TLSClient(cnf *Account) (*Client, error) {
 }
 
 // PlainClient uses the standard smtp.Dail, so an unencrypted connection will
-// be used.
+// be used. It will check wether STARTTLS is supported by the server
+// and use it, if available.
 func PlainClient(cnf *Account) (*Client, error) {
 	c, err := smtp.Dial(cnf.Server.Addr())
 	if err != nil {
@@ -87,7 +84,8 @@ func (c Client) prolog() error {
 	return nil
 }
 
-// W sets up the connection for mail sending
+// W is the equivalent of Writer, but returns a WriteCloser that you can write
+// your message to. Remember to close the writer when you are done writing to it.
 func (c Client) W(from string, to []string) (io.WriteCloser, error) {
 	if err := c.prolog(); err != nil {
 		return nil, err
@@ -106,14 +104,15 @@ func (c Client) W(from string, to []string) (io.WriteCloser, error) {
 	return c.Data()
 }
 
-func (c Client) Write(from string, to []string, data []byte) error {
+// Write sends the message with the given from / to email addresses. 
+func (c Client) Write(from string, to []string, msg []byte) error {
 	w, err := c.W(from, to)
 	if err != nil {
 		return err
 	}
 	defer w.Close()
 
-	if _, err := w.Write(data); err != nil {
+	if _, err := w.Write(msg); err != nil {
 		return err
 	}
 
@@ -124,7 +123,9 @@ func (c Client) Write(from string, to []string, data []byte) error {
 // If you have the "Sender" field set, it's first entry is used and
 // should match the Address in auth, else the first "From" entry
 // is used (with the same restrictions). If both are nil,
-// a NoSender error is returned.
+// a NoSender error is returned. To Send encrypted mails,
+// use the (Client.Write / Mail.Encrypt) or (Client.W / Mail.WriteEncrypted)
+// pairs.
 func (c Client) Send(m *Mail) error {
 	efSender, err := m.EffectiveSender()
 	if err != nil {
