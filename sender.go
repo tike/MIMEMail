@@ -104,7 +104,7 @@ func (c Client) W(from string, to []string) (io.WriteCloser, error) {
 	return c.Data()
 }
 
-// Write sends the message with the given from / to email addresses. 
+// Write sends the message with the given from / to email addresses.
 func (c Client) Write(from string, to []string, msg []byte) error {
 	w, err := c.W(from, to)
 	if err != nil {
@@ -139,4 +139,15 @@ func (c Client) Send(m *Mail) error {
 	}
 
 	return c.Write(efSender, recp, b)
+}
+
+// SendEncrypted sends the given mail to recipient, encrypting it with recipient's Key (which therefore cannot be nil)
+// and signing it with sender's Key (which may also not be nil).
+func (c Client) SendEncrypted(m *Mail, recipient, sender *Account) error {
+	enc, err := m.Encrypt(recipient, sender)
+	if err != nil {
+		return err
+	}
+
+	return c.Write(sender.Address, []string{recipient.Address}, enc)
 }
