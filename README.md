@@ -12,13 +12,18 @@ Simply create a new Mail struct with
 * NewMail()
 * Add Recipients (To, Cc, Bcc, etc).
 * Set the Subject
-* Add Attachments (by filename)
-* Get a Writer for the body by calling HTMLBody() or PlainTextBody()
-* Render your template into it.
+* Add Attachments (by filename or as io.Reader)
+* Get a Writer for the body by calling HTMLBody() and/or PlainTextBody()
+* Render your template into it (optionally using the included i18n capable templating mechanism)
+
+Optionally
+* pgp sign and/or encrypt your message (with full PGP MIME 1.0 formatting)
 
 Finally call
 * Bytes() to obtain the formatted email OR
 * WriteTo() to directly write it to a Writer OR
-* send it directly (via smtp.SendMail) through the Mail.SendMail() method.
+* send it directly (via smtp.SendMail) through the Mail.SendMail() method OR
+* send it using the included TLS capable SMTP Client
+
 
 See godoc for further details.
