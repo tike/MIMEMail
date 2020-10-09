@@ -137,13 +137,10 @@ var headerOrder = []string{"Sender", "From", "To", "Cc", "Bcc", "ReplyTo", "Foll
 func (m *Mail) writeHeader(w io.Writer) error {
 	header := m.getHeader()
 	for _, field := range headerOrder {
-		value := header.Get(field)
-		if value == "" {
-			continue
-		}
-
-		if _, err := w.Write([]byte(fmt.Sprintf("%s: %s\r\n", field, value))); err != nil {
-			return err
+		for _, value := range header.Values(field) {
+			if _, err := w.Write([]byte(fmt.Sprintf("%s: %s\r\n", field, value))); err != nil {
+				return err
+			}
 		}
 	}
 
